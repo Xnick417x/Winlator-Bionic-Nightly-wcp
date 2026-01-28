@@ -1,4 +1,4 @@
-name: Wine 11.0 v64 Staging
+name: Wine 11.0 v64 Stable (Tests Skipped)
 on: workflow_dispatch
 
 jobs:
@@ -25,14 +25,7 @@ jobs:
           echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Clone
-        run: |
-          git clone --depth 1 --branch master https://gitlab.winehq.org/wine/wine.git source
-          git clone --depth 1 --branch master https://github.com/wine-staging/wine-staging.git staging_source
-
-      - name: Patch Staging
-        run: |
-          cd staging_source
-          ./patches/patchinstall.sh DESTDIR=../source --all --backend=patch
+        run: git clone --depth 1 --branch master https://gitlab.winehq.org/wine/wine.git source
 
       - name: Patch Android
         run: |
@@ -54,7 +47,7 @@ jobs:
           mkdir -p source/build_native
           cd source/build_native
           ../configure --enable-win64 --without-x --without-freetype
-          # This compiles widl and winebuild correctly
+          # Standard build for tools (widl/winebuild)
           make -j$(nproc)
 
       - name: Build Android
@@ -72,8 +65,7 @@ jobs:
           TOOLS_PATH="$(pwd)/../build_native"
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
           
-          # FIXED HERE: Removed standalone 'make'. 
-          # Using 'make install' directly skips the broken test files.
+          # CRITICAL FIX: Direct 'make install' avoids the test crash
           make -j$(nproc) install DESTDIR=$(pwd)/stage
 
       - name: Package
@@ -98,17 +90,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v64 Staging",
+            "versionName": "Wine 11.0 v64 Stable",
             "versionCode": 64,
-            "description": "v64 Staging (Fixed)",
+            "description": "v64 Stable (Tests Skipped)",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v64-Staging.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v64-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v64-Staging
-          path: Wine-11.0-v64-Staging.wcp
+          name: Wine-11.0-v64-Stable
+          path: Wine-11.0-v64-Stable.wcp
