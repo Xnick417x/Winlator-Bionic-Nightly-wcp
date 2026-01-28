@@ -1,4 +1,4 @@
-name: Wine 11.0 v62 Stable
+name: Wine 11.0 v63 Staging
 on: workflow_dispatch
 
 jobs:
@@ -25,7 +25,14 @@ jobs:
           echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Clone
-        run: git clone --depth 1 --branch master https://gitlab.winehq.org/wine/wine.git source
+        run: |
+          git clone --depth 1 --branch master https://gitlab.winehq.org/wine/wine.git source
+          git clone --depth 1 --branch master https://github.com/wine-staging/wine-staging.git staging_source
+
+      - name: Patch Staging
+        run: |
+          cd staging_source
+          ./patches/patchinstall.sh DESTDIR=../source --all --backend=patch
 
       - name: Patch Android
         run: |
@@ -47,7 +54,6 @@ jobs:
           mkdir -p source/build_native
           cd source/build_native
           ../configure --enable-win64 --without-x --without-freetype
-          # FIXED: Removed outdated target name
           make -j$(nproc)
 
       - name: Build Android
@@ -64,8 +70,9 @@ jobs:
           export CXXFLAGS="-O2 -g0"
           TOOLS_PATH="$(pwd)/../build_native"
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
-          make -j$(nproc)
-          make install DESTDIR=$(pwd)/stage
+          
+          # FIXED: Running 'install' directly prevents 'make' from building broken test files
+          make -j$(nproc) install DESTDIR=$(pwd)/stage
 
       - name: Package
         run: |
@@ -89,17 +96,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v62 Stable",
-            "versionCode": 62,
-            "description": "v62 Stable",
+            "versionName": "Wine 11.0 v63 Staging",
+            "versionCode": 63,
+            "description": "v63 Staging",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v62-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v63-Staging.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v62-Stable
-          path: Wine-11.0-v62-Stable.wcp
+          name: Wine-11.0-v63-Staging
+          path: Wine-11.0-v63-Staging.wcp
