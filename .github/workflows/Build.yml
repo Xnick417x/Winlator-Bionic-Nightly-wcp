@@ -1,4 +1,4 @@
-name: Wine 11.0 v60 Staging (Fixed)
+name: Wine 11.0 v61 Stable
 on: workflow_dispatch
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
           apt-get update
           apt-get install -y software-properties-common wget unzip git build-essential tar xz-utils flex bison pkg-config gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf tzdata
 
-      - name: Toolchains
+      - name: Toolchain
         run: |
           wget https://github.com/mstorsjo/llvm-mingw/releases/download/20230919/llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64.tar.xz
           tar -xf llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64.tar.xz
@@ -25,14 +25,7 @@ jobs:
           echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Clone
-        run: |
-          git clone --depth 1 --branch wine-11.0 https://gitlab.winehq.org/wine/wine.git source
-          git clone --depth 1 --branch wine-11.0 https://github.com/wine-staging/wine-staging.git staging_source
-
-      - name: Patch Staging
-        run: |
-          cd staging_source
-          ./patches/patchinstall.sh DESTDIR=../source --all --backend=patch
+        run: git clone --depth 1 --branch master https://gitlab.winehq.org/wine/wine.git source
 
       - name: Patch Android
         run: |
@@ -95,17 +88,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v60 Staging",
-            "versionCode": 60,
-            "description": "v60 Staging",
+            "versionName": "Wine 11.0 v61 Stable",
+            "versionCode": 61,
+            "description": "v61 Stable (Master)",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v60-Staging.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v61-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v60-Staging
-          path: Wine-11.0-v60-Staging.wcp
+          name: Wine-11.0-v61-Stable
+          path: Wine-11.0-v61-Stable.wcp
