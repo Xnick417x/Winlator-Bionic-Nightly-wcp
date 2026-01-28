@@ -1,4 +1,4 @@
-name: Wine 11.0 v78 Stable (Global Purge)
+name: Wine 11.0 v79 Stable (Purge Fixed)
 on: workflow_dispatch
 
 jobs:
@@ -34,13 +34,13 @@ jobs:
         run: |
           cd source
           
-          # --- THE GLOBAL PURGE ---
-          # 1. Remove the illegal flag from every file in the source tree.
-          #    This ensures Configure, Makefiles, and Winegcc simply forget it exists.
-          grep -rl "--no-default-config" . | xargs sed -i 's/--no-default-config//g'
+          # --- THE GLOBAL PURGE (FIXED) ---
+          # 1. We search for the unsupported flag and delete it from all files.
+          #    The '--' fix ensures grep treats it as text, not a switch.
+          grep -rl -- "--no-default-config" . | xargs sed -i 's/--no-default-config//g'
           
           # 2. Hollow Shell (Disable Tests completely)
-          #    Remove test makefiles from the configure script so it doesn't try to build them.
+          #    Remove test makefiles from the configure script logic.
           sed -i '/tests\/Makefile/d' configure.ac
           # ------------------------
 
@@ -84,7 +84,7 @@ jobs:
           
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
           
-          # Hollow Shell: Neutralize any remaining test makefiles
+          # Hollow Shell: Neutralize any remaining test makefiles (Safety net)
           find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
           
           make -j$(nproc) install DESTDIR=$(pwd)/stage
@@ -112,17 +112,4 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v78 Stable",
-            "versionCode": 78,
-            "description": "v78 Global Purge",
-            "files": [],
-            "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
-          }
-          EOF
-          cd staging && tar -cJf ../Wine-11.0-v78-Stable.wcp *
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: Wine-11.0-v78-Stable
-          path: Wine-11.0-v78-Stable.wcp
+            "versionName": "Wine 11.0 v79 Stable
