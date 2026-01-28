@@ -1,4 +1,4 @@
-name: Wine 11.0 v73 Stable (Nuclear Fix)
+name: Wine 11.0 v74 Stable (Silent Fix)
 on: workflow_dispatch
 
 jobs:
@@ -30,18 +30,15 @@ jobs:
           cd source
           git checkout wine-11.0
 
-      - name: Nuke Tests & Patch
+      - name: Patch & Silence Tests
         run: |
           cd source
           
-          # --- NUCLEAR FIX START ---
-          # 1. Physically delete all test folders
-          find . -type d -name "tests" -exec rm -rf {} +
-          
-          # 2. Remove them from the build definition (configure.ac)
-          # This prevents the "error: could not create Makefile" we saw in v71
+          # --- SILENT FIX START ---
+          # Instead of deleting folders (which crashes config), we remove the instructions
+          # from the build file so Wine simply ignores them.
           sed -i '/tests\/Makefile/d' configure.ac
-          # --- NUCLEAR FIX END ---
+          # --- SILENT FIX END ---
 
           # Apply Patches
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
@@ -57,14 +54,13 @@ jobs:
           sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
           
-          # Regenerate configure script (Critical after modifying configure.ac)
+          # Regenerate configure script (Critical)
           autoreconf -f
 
       - name: Native Tools
         run: |
           mkdir -p source/build_native
           cd source/build_native
-          # --disable-tests is technically redundant now, but good practice
           ../configure --enable-win64 --without-x --without-freetype --disable-tests
           make -j$(nproc)
 
@@ -109,17 +105,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v73 Stable",
-            "versionCode": 73,
-            "description": "v73 Stable (Nuclear Fix)",
+            "versionName": "Wine 11.0 v74 Stable",
+            "versionCode": 74,
+            "description": "v74 Stable (Silent Fix)",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v73-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v74-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v73-Stable
-          path: Wine-11.0-v73-Stable.wcp
+          name: Wine-11.0-v74-Stable
+          path: Wine-11.0-v74-Stable.wcp
