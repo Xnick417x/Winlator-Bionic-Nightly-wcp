@@ -1,18 +1,21 @@
-name: Build Wine 11.0 v58 (Stable/Clean Fixed)
+name: Build Wine 11.0 v58 (Stable + Container Fix)
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:20.04
 
     steps:
       - name: Cleanup
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+        run: echo "Starting Containerized Build..."
 
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential git wget tar xz-utils flex bison pkg-config \
+          apt-get update
+          apt-get install -y software-properties-common
+          apt-get install -y build-essential git wget tar xz-utils flex bison pkg-config \
           gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf
 
       - name: Setup Toolchains
@@ -20,8 +23,10 @@ jobs:
           wget https://github.com/mstorsjo/llvm-mingw/releases/download/20250924/llvm-mingw-20250924-ucrt-ubuntu-20.04-x86_64.tar.xz
           tar -xf llvm-mingw-20250924-ucrt-ubuntu-20.04-x86_64.tar.xz
           echo "$(pwd)/llvm-mingw-20250924-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
-          echo "NDK_BIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_ENV
-          echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          echo "NDK_BIN=$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_ENV
+          echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Clone Source
         run: git clone --depth 1 --branch wine-11.0 https://gitlab.winehq.org/wine/wine.git source
@@ -53,6 +58,7 @@ jobs:
           mkdir -p source/build_android
           cd source/build_android
           TARGET="x86_64-linux-android28"
+          NDK_BIN="$(pwd)/../../android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CC="$NDK_BIN/${TARGET}-clang"
           export CXX="$NDK_BIN/${TARGET}-clang++"
           export LD="$NDK_BIN/ld"
@@ -124,7 +130,7 @@ jobs:
             "type": "Wine",
             "versionName": "Wine 11.0 v58-Stable",
             "versionCode": 58,
-            "description": "v58 Stable (Ubuntu 20.04)",
+            "description": "v58 Stable (Containerized)",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
