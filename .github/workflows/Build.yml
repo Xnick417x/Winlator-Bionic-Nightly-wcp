@@ -1,4 +1,4 @@
-name: Wine 11.0 v79 Stable (Purge Fixed)
+name: Wine 11.0 v80 Stable (Ziad Method)
 on: workflow_dispatch
 
 jobs:
@@ -30,21 +30,14 @@ jobs:
           cd source
           git checkout wine-11.0
 
-      - name: Patch & PURGE
+      - name: Patch & Purge
         run: |
           cd source
-          
-          # --- THE GLOBAL PURGE (FIXED) ---
-          # 1. We search for the unsupported flag and delete it from all files.
-          #    The '--' fix ensures grep treats it as text, not a switch.
+          # 1. Ziad's Fix: Ensure we don't have conflicting flags
           grep -rl -- "--no-default-config" . | xargs sed -i 's/--no-default-config//g'
-          
-          # 2. Hollow Shell (Disable Tests completely)
-          #    Remove test makefiles from the configure script logic.
           sed -i '/tests\/Makefile/d' configure.ac
-          # ------------------------
-
-          # Apply Patches
+          
+          # 2. Apply Patches
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
             wget https://github.com/Pipetto-crypto/wine/commit/$p.patch -O p.patch && patch -p1 < p.patch || true
           done
@@ -53,63 +46,11 @@ jobs:
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/address-space-proot.patch && patch -p1 < address-space-proot.patch || true
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/esync.patch && patch -p1 < esync.patch || true
           
-          # Preloader Fix (Termux/Bionic)
+          # Preloader Fix
           sed -i 's/base = (char \*)0x10000;/base = NULL;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
           
-          # Regenerate configure (Critical)
           autoreconf -f
 
       - name: Native Tools
-        run: |
-          mkdir -p source/build_native
-          cd source/build_native
-          ../configure --enable-win64 --without-x --without-freetype --disable-tests
-          make -j$(nproc)
-
-      - name: Build Android
-        run: |
-          mkdir -p source/build_android
-          cd source/build_android
-          TARGET="x86_64-linux-android28"
-          NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          export CC="$NDK_BIN/${TARGET}-clang"
-          export CXX="$NDK_BIN/${TARGET}-clang++"
-          export LD="$NDK_BIN/ld"
-          export CROSS_COMPILE="llvm-"
-          export CFLAGS="-O2 -g0"
-          export CXXFLAGS="-O2 -g0"
-          TOOLS_PATH="$(pwd)/../build_native"
-          
-          ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
-          
-          # Hollow Shell: Neutralize any remaining test makefiles (Safety net)
-          find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
-          
-          make -j$(nproc) install DESTDIR=$(pwd)/stage
-
-      - name: Package
-        run: |
-          mkdir -p prefix_root/.wine/drive_c/windows/system32
-          mkdir -p prefix_root/.wine/drive_c/windows/syswow64
-          mkdir -p prefix_root/.wine/drive_c/users/xuser
-          cp -r source/build_android/stage/usr/lib/wine/x86_64-windows/* prefix_root/.wine/drive_c/windows/system32/
-          cp -r source/build_android/stage/usr/lib/wine/i386-windows/* prefix_root/.wine/drive_c/windows/syswow64/
-          printf "WINE REGISTRY Version 2\n\n[System\\\\CurrentControlSet\\\\Control\\\\Video\\\\{00000000-0000-0000-0000-000000000000}\\\\0000]\n\"Renderer\"=\"vulkan\"\n" > prefix_root/.wine/system.reg
-          echo "WINE REGISTRY Version 2" > prefix_root/.wine/user.reg
-          echo "WINE REGISTRY Version 2" > prefix_root/.wine/userdef.reg
-          echo "disable" > prefix_root/.wine/.update-timestamp
-          cd prefix_root
-          tar -cJf ../prefixPack.txz .wine
-          cd ..
-          mkdir staging
-          mkdir -p staging/bin staging/lib staging/share
-          cp -r source/build_android/stage/usr/bin/* staging/bin/
-          cp -r source/build_android/stage/usr/lib/* staging/lib/
-          cp -r source/build_android/stage/usr/share/* staging/share/
-          mv prefixPack.txz staging/
-          cat <<EOF > staging/profile.json
-          {
-            "type": "Wine",
-            "versionName": "Wine 11.0 v79 Stable
