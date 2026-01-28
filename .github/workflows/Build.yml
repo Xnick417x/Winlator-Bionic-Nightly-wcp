@@ -1,4 +1,4 @@
-name: Wine 11.0 v75 (Final Fix)
+name: Wine 11.0 v76 Stable (Wrapper Fix)
 on: workflow_dispatch
 
 jobs:
@@ -8,13 +8,13 @@ jobs:
       image: ubuntu:20.04
 
     steps:
-      - name: Setup Environment
+      - name: Setup
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -y software-properties-common wget unzip git build-essential tar xz-utils flex bison pkg-config gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf tzdata gettext
 
-      - name: Setup Toolchain
+      - name: Toolchain
         run: |
           wget https://github.com/mstorsjo/llvm-mingw/releases/download/20230919/llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64.tar.xz
           tar -xf llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64.tar.xz
@@ -24,50 +24,66 @@ jobs:
           echo "NDK_ROOT=$(pwd)/android-ndk-r25c" >> $GITHUB_ENV
           echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: Clone Wine 11.0
+      - name: Clone
         run: |
           git clone https://github.com/wine-mirror/wine.git source
           cd source
           git checkout wine-11.0
 
-      - name: Apply All Patches
+      - name: Patch
         run: |
           cd source
-          # Pipetto Patches (Boot Fixes)
           for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
             wget https://github.com/Pipetto-crypto/wine/commit/$p.patch -O p.patch && patch -p1 < p.patch || true
           done
-          
-          # Bruno Patches (Winlator Integration)
           wget https://github.com/brunodev85/wine-9.2-custom/commit/a4ef2bf8963fe4bfab390eebf73336364ce209bc.patch -O bruno_desktop.patch && patch -p1 < bruno_desktop.patch || true
           wget https://github.com/brunodev85/wine-9.2-custom/commit/73336364ce209bc.patch -O bruno_shell.patch && patch -p1 < bruno_shell.patch || true
-          
-          # Airidosas Patches (Performance)
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/address-space-proot.patch && patch -p1 < address-space-proot.patch || true
           wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/esync.patch && patch -p1 < esync.patch || true
           
-          # Preloader Fix (Critical for Termux/Bionic)
+          # Preloader Fix (Termux/Bionic)
           sed -i 's/base = (char \*)0x10000;/base = NULL;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
           sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
           
           autoreconf -f
 
-      - name: Build Native Tools
+      - name: Native Tools
         run: |
           mkdir -p source/build_native
           cd source/build_native
           ../configure --enable-win64 --without-x --without-freetype --disable-tests
           make -j$(nproc)
 
-      - name: Configure Android
+      - name: Build Android
         run: |
           mkdir -p source/build_android
           cd source/build_android
           TARGET="x86_64-linux-android28"
           NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          export CC="$NDK_BIN/${TARGET}-clang"
-          export CXX="$NDK_BIN/${TARGET}-clang++"
+          
+          # --- COMPILER WRAPPER START ---
+          # This script sits between Wine and Clang. 
+          # It silently deletes the '--no-default-config' flag that causes the crash.
+          echo '#!/bin/bash' > clang-wrap.sh
+          echo 'ARGS=("$@")' >> clang-wrap.sh
+          echo 'FILTERED=()' >> clang-wrap.sh
+          echo 'for arg in "${ARGS[@]}"; do' >> clang-wrap.sh
+          echo '  if [ "$arg" != "--no-default-config" ]; then' >> clang-wrap.sh
+          echo '    FILTERED+=("$arg")' >> clang-wrap.sh
+          echo '  fi' >> clang-wrap.sh
+          echo 'done' >> clang-wrap.sh
+          echo 'exec '"$NDK_BIN/${TARGET}-clang"' "${FILTERED[@]}"' >> clang-wrap.sh
+          chmod +x clang-wrap.sh
+          
+          # Same wrapper for C++ just in case
+          cp clang-wrap.sh clangxx-wrap.sh
+          sed -i "s|${TARGET}-clang|${TARGET}-clang++|g" clangxx-wrap.sh
+          chmod +x clangxx-wrap.sh
+          # --- COMPILER WRAPPER END ---
+
+          export CC="$(pwd)/clang-wrap.sh"
+          export CXX="$(pwd)/clangxx-wrap.sh"
           export LD="$NDK_BIN/ld"
           export CROSS_COMPILE="llvm-"
           export CFLAGS="-O2 -g0"
@@ -75,63 +91,46 @@ jobs:
           TOOLS_PATH="$(pwd)/../build_native"
           
           ../configure --host=$TARGET --with-wine-tools=$TOOLS_PATH --enable-archs=i386,x86_64 --prefix=/usr --with-mingw=clang --with-sdl --enable-win64 --enable-nls --with-pulse --with-x --disable-win16 --disable-opencl --disable-tests --without-wayland --without-capi --without-coreaudio --without-cups --without-dbus --without-gphoto --without-gssapi --without-krb5 --without-netapi --without-oss --without-pcap --without-pcsclite --without-sane --without-udev --without-unwind --without-usb --without-v4l2 --without-xinerama --without-xxf86vm --without-osmesa --enable-wineandroid_drv=no
-
-      - name: Neutralize Tests & Build
-        run: |
-          cd source/build_android
-          # THIS IS THE FIX:
-          # We find every Makefile created for a test folder and wipe it clean.
-          # This prevents the compiler from ever seeing the test code that crashes it.
+          
+          # Neutralize Tests (Just to be safe/faster)
           find . -name "Makefile" | grep "/tests/" | xargs -I {} sh -c 'echo "all: ;" > {}'
           
-          # Now we build. Since test makefiles are empty, it only builds the real code.
           make -j$(nproc) install DESTDIR=$(pwd)/stage
 
-      - name: Package Complete WCP
+      - name: Package
         run: |
           mkdir -p prefix_root/.wine/drive_c/windows/system32
           mkdir -p prefix_root/.wine/drive_c/windows/syswow64
           mkdir -p prefix_root/.wine/drive_c/users/xuser
-          
-          # Copy compiled files (Standard 9.20 Layout)
           cp -r source/build_android/stage/usr/lib/wine/x86_64-windows/* prefix_root/.wine/drive_c/windows/system32/
           cp -r source/build_android/stage/usr/lib/wine/i386-windows/* prefix_root/.wine/drive_c/windows/syswow64/
-          
-          # Add Registry Fixes
           printf "WINE REGISTRY Version 2\n\n[System\\\\CurrentControlSet\\\\Control\\\\Video\\\\{00000000-0000-0000-0000-000000000000}\\\\0000]\n\"Renderer\"=\"vulkan\"\n" > prefix_root/.wine/system.reg
           echo "WINE REGISTRY Version 2" > prefix_root/.wine/user.reg
           echo "WINE REGISTRY Version 2" > prefix_root/.wine/userdef.reg
-          
-          # Add Timestamp Fix
           echo "disable" > prefix_root/.wine/.update-timestamp
-          
-          # Pack
           cd prefix_root
           tar -cJf ../prefixPack.txz .wine
           cd ..
-          
           mkdir staging
           mkdir -p staging/bin staging/lib staging/share
           cp -r source/build_android/stage/usr/bin/* staging/bin/
           cp -r source/build_android/stage/usr/lib/* staging/lib/
           cp -r source/build_android/stage/usr/share/* staging/share/
           mv prefixPack.txz staging/
-          
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v75 Stable",
-            "versionCode": 75,
-            "description": "v75 Stable + All Fixes",
+            "versionName": "Wine 11.0 v76 Stable",
+            "versionCode": 76,
+            "description": "v76 Wrapper Fix",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          
-          cd staging && tar -cJf ../Wine-11.0-v75-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v76-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v75-Stable
-          path: Wine-11.0-v75-Stable.wcp
+          name: Wine-11.0-v76-Stable
+          path: Wine-11.0-v76-Stable.wcp
