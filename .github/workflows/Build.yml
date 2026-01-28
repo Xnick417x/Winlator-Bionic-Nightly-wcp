@@ -1,4 +1,4 @@
-name: Wine 11.0 v61 Stable
+name: Wine 11.0 v62 Stable
 on: workflow_dispatch
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y software-properties-common wget unzip git build-essential tar xz-utils flex bison pkg-config gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf tzdata
+          apt-get install -y software-properties-common wget unzip git build-essential tar xz-utils flex bison pkg-config gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf tzdata gettext
 
       - name: Toolchain
         run: |
@@ -47,7 +47,8 @@ jobs:
           mkdir -p source/build_native
           cd source/build_native
           ../configure --enable-win64 --without-x --without-freetype
-          make -j$(nproc) __wine_tools_install_lib__
+          # FIXED: Removed outdated target name
+          make -j$(nproc)
 
       - name: Build Android
         run: |
@@ -88,17 +89,17 @@ jobs:
           cat <<EOF > staging/profile.json
           {
             "type": "Wine",
-            "versionName": "Wine 11.0 v61 Stable",
-            "versionCode": 61,
-            "description": "v61 Stable (Master)",
+            "versionName": "Wine 11.0 v62 Stable",
+            "versionCode": 62,
+            "description": "v62 Stable",
             "files": [],
             "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
           }
           EOF
-          cd staging && tar -cJf ../Wine-11.0-v61-Stable.wcp *
+          cd staging && tar -cJf ../Wine-11.0-v62-Stable.wcp *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Wine-11.0-v61-Stable
-          path: Wine-11.0-v61-Stable.wcp
+          name: Wine-11.0-v62-Stable
+          path: Wine-11.0-v62-Stable.wcp
