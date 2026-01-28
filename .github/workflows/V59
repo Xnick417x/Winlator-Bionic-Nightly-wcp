@@ -1,0 +1,144 @@
+name: Build Wine 11.0 v59 (Stable/Clean)
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:20.04
+
+    steps:
+      - name: 1. Setup Container
+        run: |
+          apt-get update
+          apt-get install -y software-properties-common wget unzip git
+
+      - name: 2. Install Dependencies
+        run: |
+          apt-get install -y build-essential tar xz-utils flex bison pkg-config \
+          gcc-multilib g++-multilib libx11-dev libpulse-dev libsdl2-dev patch python3 autoconf
+
+      - name: 3. Setup Toolchains (Buddy Standard 2023)
+        run: |
+          wget https://github.com/mstorsjo/llvm-mingw/releases/download/20230919/llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64.tar.xz
+          tar -xf llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64.tar.xz
+          echo "$(pwd)/llvm-mingw-20230919-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
+          wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          echo "NDK_ROOT=$(pwd)/android-ndk-r25c" >> $GITHUB_ENV
+          echo "$(pwd)/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+      - name: 4. Clone Source
+        run: git clone --depth 1 --branch wine-11.0 https://gitlab.winehq.org/wine/wine.git source
+
+      - name: 5. Apply Android Patches
+        run: |
+          cd source
+          for p in c9ee4e003238c9461461156f986d91349de27fea 441c0fe673de0a640e176110d9442e8e41250fd7 6e7166c71de8c09a1c91fb96228920e7085e2366; do
+            wget https://github.com/Pipetto-crypto/wine/commit/$p.patch -O p.patch && patch -p1 < p.patch || true
+          done
+          wget https://github.com/brunodev85/wine-9.2-custom/commit/a4ef2bf8963fe4bfab390eebf73336364ce209bc.patch -O bruno_desktop.patch && patch -p1 < bruno_desktop.patch || true
+          wget https://github.com/brunodev85/wine-9.2-custom/commit/73336364ce209bc.patch -O bruno_shell.patch && patch -p1 < bruno_shell.patch || true
+          wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/address-space-proot.patch && patch -p1 < address-space-proot.patch || true
+          wget https://raw.githubusercontent.com/airidosas252/Wine-Builds/master/esync.patch && patch -p1 < esync.patch || true
+          sed -i 's/base = (char \*)0x10000;/base = NULL;/g' dlls/ntdll/unix/virtual.c
+          sed -i 's/size = 0x110000;/size = 0;/g' dlls/ntdll/unix/virtual.c
+          sed -i 's/0x00010000/0x00000000/g' loader/preloader.c || true
+          autoreconf -f
+
+      - name: 6. Build Native Tools
+        run: |
+          mkdir -p source/build_native
+          cd source/build_native
+          ../configure --enable-win64 --without-x --without-freetype
+          make -j$(nproc) __wine_tools_install_lib__
+
+      - name: 7. Build Android Target
+        run: |
+          mkdir -p source/build_android
+          cd source/build_android
+          TARGET="x86_64-linux-android28"
+          NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC="$NDK_BIN/${TARGET}-clang"
+          export CXX="$NDK_BIN/${TARGET}-clang++"
+          export LD="$NDK_BIN/ld"
+          export CROSS_COMPILE="llvm-"
+          export CFLAGS="-O2 -g0"
+          export CXXFLAGS="-O2 -g0"
+          TOOLS_PATH="$(pwd)/../build_native"
+          
+          ../configure \
+            --host=$TARGET \
+            --with-wine-tools=$TOOLS_PATH \
+            --enable-archs=i386,x86_64 \
+            --prefix=/usr \
+            --with-mingw=clang \
+            --with-sdl \
+            --enable-win64 \
+            --enable-nls \
+            --with-pulse \
+            --with-x \
+            --disable-win16 \
+            --disable-opencl \
+            --disable-tests \
+            --without-wayland \
+            --without-capi \
+            --without-coreaudio \
+            --without-cups \
+            --without-dbus \
+            --without-gphoto \
+            --without-gssapi \
+            --without-krb5 \
+            --without-netapi \
+            --without-oss \
+            --without-pcap \
+            --without-pcsclite \
+            --without-sane \
+            --without-udev \
+            --without-unwind \
+            --without-usb \
+            --without-v4l2 \
+            --without-xinerama \
+            --without-xxf86vm \
+            --without-osmesa \
+            --enable-wineandroid_drv=no
+
+          make -j$(nproc)
+          make install DESTDIR=$(pwd)/stage
+
+      - name: 8. Package & Assemble
+        run: |
+          mkdir -p prefix_root/.wine/drive_c/windows/system32
+          mkdir -p prefix_root/.wine/drive_c/windows/syswow64
+          mkdir -p prefix_root/.wine/drive_c/users/xuser
+          cp -r source/build_android/stage/usr/lib/wine/x86_64-windows/* prefix_root/.wine/drive_c/windows/system32/
+          cp -r source/build_android/stage/usr/lib/wine/i386-windows/* prefix_root/.wine/drive_c/windows/syswow64/
+          printf "WINE REGISTRY Version 2\n\n[System\\\\CurrentControlSet\\\\Control\\\\Video\\\\{00000000-0000-0000-0000-000000000000}\\\\0000]\n\"Renderer\"=\"vulkan\"\n" > prefix_root/.wine/system.reg
+          echo "WINE REGISTRY Version 2" > prefix_root/.wine/user.reg
+          echo "WINE REGISTRY Version 2" > prefix_root/.wine/userdef.reg
+          cd prefix_root
+          tar -cJf ../prefixPack.txz .wine
+          cd ..
+          mkdir staging
+          mkdir -p staging/bin staging/lib staging/share
+          cp -r source/build_android/stage/usr/bin/* staging/bin/
+          cp -r source/build_android/stage/usr/lib/* staging/lib/
+          cp -r source/build_android/stage/usr/share/* staging/share/
+          mv prefixPack.txz staging/
+          cat <<EOF > staging/profile.json
+          {
+            "type": "Wine",
+            "versionName": "Wine 11.0 v59-Stable",
+            "versionCode": 59,
+            "description": "v59 Stable (Clean) - 2023 Toolchain",
+            "files": [],
+            "wine": { "binPath": "bin", "libPath": "lib", "prefixPack": "prefixPack.txz" }
+          }
+          EOF
+          cd staging && tar -cJf ../Wine-11.0-v59-Stable.wcp *
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wine-11.0-v59-Stable
+          path: Wine-11.0-v59-Stable.wcp
