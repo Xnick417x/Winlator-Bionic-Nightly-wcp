@@ -1,59 +1,83 @@
-name: Build DXVK with GPLAsync
+name: Build DXVK Nightly
 
 on:
+  schedule:
+    - cron: '0 0 * * *'
   workflow_dispatch:
-    inputs:
-      dxvk_version:
-        description: "DXVK Branch/Tag (e.g., master or v2.1)"
-        required: true
-        default: "master"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout DXVK
-        uses: actions/checkout@v4
-        with:
-          repository: doitsujin/dxvk
-          ref: ${{ inputs.dxvk_version }}
-          submodules: recursive
+    - name: Checkout DXVK
+      uses: actions/checkout@v4
+      with:
+        repository: doitsujin/dxvk
+        path: dxvk
+        submodules: recursive
 
-      - name: Download GPLAsync Patch
-        run: |
-          # Downloading the raw patch file you provided
-          wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch -O gplasync.patch
+    - name: Checkout DXVK GPLAsync
+      uses: actions/checkout@v4
+      with:
+        repository: Ph42oN/dxvk-gplasync
+        path: dxvk-gplasync
 
-      - name: Apply Patch
-        run: |
-          # Apply the patch; we use --3way to try and resolve minor conflicts automatically
-          git apply --3way --ignore-space-change --ignore-whitespace gplasync.patch
-          echo "Patch applied successfully!"
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y meson ninja-build mingw-w64 glslang-tools wine
 
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y meson ninja-build glslang-tools mingw-w64
+    - name: Apply Patch
+      run: |
+        cd dxvk
+        git apply ../dxvk-gplasync/patches/dxvk-gplasync-master.patch
 
-      - name: Build DXVK
-        run: |
-          # DXVK includes a script to handle the cross-compilation setup
-          ./package-release.sh master $(pwd)/output --no-package
+    - name: Build DXVK
+      run: |
+        cd dxvk
+        ./package-release.sh master ../dxvk-built --no-package
 
-      - name: Prepare WCP Structure
-        run: |
-          mkdir -p wcp_package/x64
-          mkdir -p wcp_package/x86
-          
-          # Copy compiled DLLs to the structure Winlator expects
-          cp output/dxvk-master/x64/*.dll wcp_package/x64/
-          cp output/dxvk-master/x32/*.dll wcp_package/x86/
-          
-          # Create the file info for Winlator (Optional but good practice)
-          echo "DXVK-GPLAsync-Build" > wcp_package/version.txt
+    - name: Generate Changelog
+      run: |
+        cd dxvk
+        git log --since="24 hours ago" > ../changelog.txt
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dxvk-gplasync-wcp
-          path: wcp_package/
+    - name: Prepare Package
+      run: |
+        mkdir -p packaging/system32 packaging/syswow64
+        cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
+        cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
+        
+        # Create profile.json with Author field
+        cat <<EOF > packaging/profile.json
+        {
+          "type": "DXVK",
+          "versionName": "2.7.1-gplasync",
+          "versionCode": 1,
+          "description": "dxvk 2.7.1-gplasync",
+          "author": "Blank",
+          "files": [
+            { "source": "system32/d3d9.dll", "target": "\${system32}/d3d9.dll" },
+            { "source": "system32/d3d10core.dll", "target": "\${system32}/d3d10core.dll" },
+            { "source": "system32/d3d11.dll", "target": "\${system32}/d3d11.dll" },
+            { "source": "system32/dxgi.dll", "target": "\${system32}/dxgi.dll" },
+            { "source": "syswow64/d3d9.dll", "target": "\${syswow64}/d3d9.dll" },
+            { "source": "syswow64/d3d10core.dll", "target": "\${syswow64}/d3d10core.dll" },
+            { "source": "syswow64/d3d11.dll", "target": "\${syswow64}/d3d11.dll" },
+            { "source": "syswow64/dxgi.dll", "target": "\${syswow64}/dxgi.dll" }
+          ]
+        }
+        EOF
+
+    - name: Create WCP Package
+      run: |
+        tar -cJf dxvk-gplasync-nightly.wcp -C packaging .
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dxvk-nightly-build
+        path: |
+          dxvk-gplasync-nightly.wcp
+          changelog.txt
