@@ -23,13 +23,13 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    # ---------------------------------------------------------
+    # STEP 1: Build Core as PURE ARM64 (Proven to work)
+    # ---------------------------------------------------------
     - name: Build libarm64ec.dll (Pure ARM64)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
-        
-        # FIX: We explicitly set ASM targets and flags.
-        # This forces the assembler to accept Windows-specific flags like "dr".
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -50,16 +50,21 @@ jobs:
           -DBUILD_TESTING=False
           
         ninja
-        
-        # Install to generate the Thunk JSONs (Fixes Black Screen)
         ninja install
 
-    - name: Build libwow64fex.dll (WOW64)
+    # ---------------------------------------------------------
+    # STEP 2: Build WOW64 as ARM64EC (To fix Linking Error)
+    # ---------------------------------------------------------
+    - name: Build libwow64fex.dll (ARM64EC + ARM64 Context)
       run: |
         mkdir build-wow64
         cd build-wow64
         
-        # Same fix for the second DLL
+        # KEY FLAGS:
+        # 1. Target = arm64ec-w64-mingw32 (Allows linking the x64 libs that caused your error)
+        # 2. -D_ARM64_ (Forces correct register names like 'Pc' instead of 'Rip')
+        # 3. ASM Target = arm64ec (Fixes "unknown flag .dr")
+        
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -68,12 +73,12 @@ jobs:
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_ASM_COMPILER=clang \
-          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_ASM_FLAGS="--target=aarch64-w64-mingw32" \
+          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_ASM_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_C_FLAGS="-fuse-ld=lld -D_ARM64_" \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld -D_ARM64_" \
+          -DCMAKE_ASM_FLAGS="--target=arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -88,23 +93,22 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # 1. Copy DLLs (Renaming libFEXCore.dll to what Winlator needs)
-        # We look in the 'bin' folder where they are usually built
+        # Copy DLLs
+        # Note: We check both output names just in case
         find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # 2. BLACK SCREEN FIX: Copy the Thunk configurations
-        # These are generated during 'ninja install' into the share folder.
+        # Copy Thunks (Black Screen Fix)
         mkdir -p packaging/share/fex-emu
         cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunk configs not found"
         
-        # 3. Create profile.json
+        # Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly (Pure ARM64)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "FEXCore Nightly (Hybrid)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
