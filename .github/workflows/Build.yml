@@ -28,9 +28,9 @@ jobs:
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # THE FIX: Added CMAKE_ASM_COMPILER_TARGET and CMAKE_ASM_FLAGS.
-        # This forces the assembler to know it is building for Windows (COFF) 
-        # so it accepts the "dr" flags in LoadConfig.S.
+        # FIX: We add "-D_ARM64_" to C_FLAGS and CXX_FLAGS.
+        # This forces Windows headers to define '_CONTEXT' as the ARM64 structure (with Pc, X, V)
+        # instead of the default x64 structure (Rip, Rax) used by ARM64EC.
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -39,13 +39,10 @@ jobs:
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_ASM_FLAGS="-target arm64ec-w64-mingw32" \
+          -DCMAKE_C_FLAGS="-fuse-ld=lld -D_ARM64_" \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld -D_ARM64_" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -57,7 +54,7 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        # Added ASM flags here too for consistency
+        # Standard AArch64 build (No special defines needed)
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -65,13 +62,10 @@ jobs:
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_C_FLAGS="-fuse-ld=lld" \
           -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_ASM_FLAGS="-target aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -86,9 +80,11 @@ jobs:
         
         mkdir -p packaging/system32
         
+        # Copy the DLLs
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
+        # Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
