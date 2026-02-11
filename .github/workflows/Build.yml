@@ -8,16 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # We use the container because it has the libraries we need installed in /opt/llvm-mingw
-    container: mstorsjo/llvm-mingw:latest
 
     steps:
-    - name: Install Git and Python
-      # Container is minimal, add tools we need
-      run: |
-        apt-get update
-        apt-get install -y git python3
-
     - name: Checkout FEX
       uses: actions/checkout@v4
       with:
@@ -25,26 +17,64 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build python3
+
+    - name: Setup LLVM-MinGW Toolchain
+      run: |
+        # Download the specific toolchain release
+        wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
+        
+        # Add to PATH
+        echo "$(pwd)/llvm-mingw/bin" >> $GITHUB_PATH
+
+    - name: Create FEX Toolchain Wrappers
+      run: |
+        # FEX's CMake scripts look for 'arm64ec-w64-mingw32-clang', which doesn't exist.
+        # We create it manually and force the correct flags.
+        
+        TC_BIN="$(pwd)/llvm-mingw/bin"
+        
+        # 1. Wrapper for C Compiler (Clang)
+        # We target arm64ec, but use the AArch64 sysroot (libraries).
+        # We tell the linker (-fuse-ld=lld) to use the correct emulation (-m arm64ecpe).
+        cat <<EOF > "$TC_BIN/arm64ec-w64-mingw32-clang"
+        #!/bin/sh
+        "$TC_BIN/clang" --target=arm64ec-w64-mingw32 -Wl,-m,arm64ecpe "\$@"
+        EOF
+        
+        # 2. Wrapper for C++ Compiler (Clang++)
+        cat <<EOF > "$TC_BIN/arm64ec-w64-mingw32-clang++"
+        #!/bin/sh
+        "$TC_BIN/clang++" --target=arm64ec-w64-mingw32 -Wl,-m,arm64ecpe "\$@"
+        EOF
+        
+        # 3. Wrapper for AR (Archiver)
+        # FEX needs an 'ar' tool with the correct prefix.
+        ln -s "$TC_BIN/llvm-ar" "$TC_BIN/arm64ec-w64-mingw32-ar"
+        
+        # Make executable
+        chmod +x "$TC_BIN/arm64ec-w64-mingw32-clang"*
+        
+        # DEBUG: Verify it runs
+        "$TC_BIN/arm64ec-w64-mingw32-clang" --version
+
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # 1. Define paths (Container standard paths)
-        TOOLCHAIN="/opt/llvm-mingw"
-        
-        # 2. Configure CMake with Manual Compiler Definition
-        # We explicitly target arm64ec-w64-mingw32
-        # We add '-Wl,-machine:arm64x' which fixes the "conflict" error by allowing mixed mode.
+        # Use FEX's provided toolchain file. 
+        # It will now find our custom 'arm64ec-w64-mingw32-clang' wrapper.
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_C_COMPILER="$TOOLCHAIN/bin/clang" \
-          -DCMAKE_CXX_COMPILER="$TOOLCHAIN/bin/clang++" \
-          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-Wl,-machine:arm64x" \
-          -DCMAKE_CXX_FLAGS="-Wl,-machine:arm64x" \
+          -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -56,15 +86,11 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        TOOLCHAIN="/opt/llvm-mingw"
-        
-        # Standard AArch64 build. 
+        # Standard AArch64 build (wrappers already exist in llvm-mingw)
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_C_COMPILER="$TOOLCHAIN/bin/clang" \
-          -DCMAKE_CXX_COMPILER="$TOOLCHAIN/bin/clang++" \
-          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -73,15 +99,20 @@ jobs:
 
     - name: Prepare Package
       run: |
-        git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
         
         mkdir -p packaging/system32
         
         # Copy files
+        # Note: FEX might output 'libarm64ecfex.dll' or just 'libarm64ec.dll'. We handle both.
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
+        find build-arm64ec -name "libarm64ec.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
+        
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        
+        # Verify
+        ls -R packaging/
         
         # Create profile.json
         cat <<EOF > packaging/profile.json
@@ -100,7 +131,6 @@ jobs:
 
     - name: Create WCP Package
       run: |
-        git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
         tar -cJf FEXCore-Nightly-${COMMIT_HASH}.wcp -C packaging .
 
