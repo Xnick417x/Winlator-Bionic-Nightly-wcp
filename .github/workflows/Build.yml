@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL: Using the 20240917 container to avoid the broken Clang 22 linker
+    # VITAL: Using the 20240917 container to avoid broken Clang 22 linker issues
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -16,6 +16,10 @@ jobs:
       run: |
         apt-get update -y
         apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools
+
+    - name: Set Toolchain Environment
+      # This ensures the compilers are accessible throughout the job
+      run: echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -29,24 +33,22 @@ jobs:
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (ARM64EC)
+    - name: Build FEXCore (ARM64EC Official)
       run: |
-        # ABSOLUTE PATH FIX: Hard-coding the bin path into this step's environment
-        export PATH="/opt/llvm-mingw/bin:$PATH"
+        # STRATEGY: Hard-set CC and CXX to their absolute paths to bypass PATH detection
+        export CC=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang
+        export CXX=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang++
         
         # Using the official toolchain file from the FEX repo
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         cmake --build build
-        # This install step is required for generating thunk metadata
         cmake --install build
 
     - name: Prepare Packaging Directory
@@ -57,11 +59,11 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # Copy DLLs using the exact names from your working JSON
+        # Copy DLLs using your working JSON names
         cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
         cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
         
-        # Generate the profile.json exactly like your DXVK Nightly builds
+        # Build the profile.json like your DXVK Nightly
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
@@ -86,7 +88,7 @@ jobs:
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
-        # Ensures profile.json is at the root to fix "Incomplete Content"
+        # Ensures profile.json is at the root to fix Winlator "Incomplete Content"
         tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
