@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # STABLE: Using the 20240917 container to avoid the Clang 22 linker bugs
+    # VITAL: Using the 20240917 container to avoid the broken Clang 22 linker
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -25,13 +25,13 @@ jobs:
         fetch-depth: 0
 
     - name: Patch WinNT Header
-      # FIX: Corrects the typo in winnt.h as required for stable compilers
+      # FIX: Corrects the typo in winnt.h to prevent compiler errors
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
     - name: Build FEXCore (ARM64EC)
       run: |
-        # PATH FIX: Adding the toolchain bin folder directly to the PATH for this step
+        # ABSOLUTE PATH FIX: Hard-coding the bin path into this step's environment
         export PATH="/opt/llvm-mingw/bin:$PATH"
         
         # Using the official toolchain file from the FEX repo
@@ -46,6 +46,8 @@ jobs:
           -DBUILD_TESTING=False
           
         cmake --build build
+        # This install step is required for generating thunk metadata
+        cmake --install build
 
     - name: Prepare Packaging Directory
       run: |
@@ -55,11 +57,11 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # 1. Copy DLLs (Matching your working JSON names exactly)
+        # Copy DLLs using the exact names from your working JSON
         cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
         cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
         
-        # 2. Create profile.json
+        # Generate the profile.json exactly like your DXVK Nightly builds
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
@@ -84,6 +86,7 @@ jobs:
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         cd final_package
+        # Ensures profile.json is at the root to fix "Incomplete Content"
         tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
