@@ -22,52 +22,24 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake ninja-build python3
 
+    # FIX: Use the official action. This handles ALL paths and libraries automatically.
     - name: Setup LLVM-MinGW Toolchain
-      run: |
-        # Download LLVM-MinGW
-        wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
-
-    - name: Create Missing Compiler Wrappers (Fix Linker)
-      run: |
-        TOOLCHAIN_DIR="$(pwd)/llvm-mingw/bin"
-        
-        # We need to FORCE the use of lld (the LLVM linker) using -fuse-ld
-        # Otherwise it falls back to /usr/bin/ld which fails.
-        
-        # 1. Create Wrapper for C Compiler (clang) with Linker fix
-        cat <<EOF > "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang"
-        #!/bin/sh
-        "$TOOLCHAIN_DIR/clang" --target=arm64ec-w64-mingw32 -fuse-ld="$TOOLCHAIN_DIR/ld.lld" "\$@"
-        EOF
-        
-        # 2. Create Wrapper for C++ Compiler (clang++) with Linker fix
-        cat <<EOF > "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang++"
-        #!/bin/sh
-        "$TOOLCHAIN_DIR/clang++" --target=arm64ec-w64-mingw32 -fuse-ld="$TOOLCHAIN_DIR/ld.lld" "\$@"
-        EOF
-        
-        # 3. Create Wrapper for GCC/G++ (FEX might fallback to these names)
-        cp "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang" "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-gcc"
-        cp "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang++" "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-g++"
-        
-        # 4. Make them executable
-        chmod +x "$TOOLCHAIN_DIR"/arm64ec-w64-mingw32-*
+      uses: mstorsjo/setup-llvm-mingw@v1
+      with:
+        version: latest
 
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
-        export PATH="$(pwd)/llvm-mingw/bin:$PATH"
-        
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # We explicitly set CMAKE_LINKER just to be safe
+        # The action makes 'arm64ec-w64-mingw32-clang' available globally.
+        # We don't need to force paths or wrappers anymore.
+        
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_LINKER="$(pwd)/../llvm-mingw/bin/ld.lld" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -76,8 +48,6 @@ jobs:
 
     - name: Build libwow64fex.dll (WOW64)
       run: |
-        export PATH="$(pwd)/llvm-mingw/bin:$PATH"
-        
         mkdir build-wow64
         cd build-wow64
         
@@ -85,7 +55,6 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_LINKER="$(pwd)/../llvm-mingw/bin/ld.lld" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -99,12 +68,12 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy files (Checking multiple possible output names)
-        # We use 'find' to locate the dlls safely regardless of output folder
+        # Copy files (using 'find' to be safe against folder changes)
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
-        find build-arm64ec -name "libarm64ec.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
-        
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        
+        # Verify files were copied (Optional debug step)
+        ls -R packaging/
         
         cat <<EOF > packaging/profile.json
         {
