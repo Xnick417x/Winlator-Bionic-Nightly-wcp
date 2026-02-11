@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Stable)
+name: Build FEXCore Nightly (No Strip + Fix Name)
 
 on:
   workflow_dispatch:
@@ -50,14 +50,18 @@ jobs:
       run: |
         git config --global --add safe.directory '*'
         git fetch --tags
+        
+        # Get the Main Version (e.g., FEX-2601)
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
+        
+        # Get the Commit Hash (e.g., 1387aecc)
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        BUILD_DATE=$(date +'%Y.%m.%d')
-        VERSION_NAME="Nightly-${BUILD_DATE}-${COMMIT_HASH}"
+        
+        # FIX: Format matches your screenshot exactly: FEX-[Tag]-Nightly-[Commit]
+        VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
-        echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
 
     - name: Patch WinNT Header
       run: |
@@ -71,7 +75,7 @@ jobs:
           
           echo "::group::Building $triple"
           
-          # CRITICAL: Added -DENABLE_ASSERTIONS=False to stop the crash
+          # CRITICAL: -DENABLE_ASSERTIONS=False prevents debug crashes
           cmake -B "$build_dir" -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -95,7 +99,7 @@ jobs:
         # 2. Build Bridge (AArch64)
         build_arch "aarch64"
 
-    - name: Package & Strip
+    - name: Package (NO STRIP)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
@@ -110,20 +114,20 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip
-            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
-            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
+            # REMOVED STRIPPING
+            # This was likely corrupting the DLL and causing the post-boot crash.
         else
             echo "::error::Build incomplete! Missing DLLs."
             exit 1
         fi
 
+        # Generate Profile JSON (Matches your Format)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "${{ env.VERSION_NAME }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly\\nCommit: ${{ env.COMMIT_HASH }}\\nDate: ${{ env.BUILD_DATE }}\\nOptimized for Winlator/Ludashi",
+          "description": "FEXCore Nightly\\nCommit: ${{ env.COMMIT_HASH }}\\nOptimized for Winlator/Ludashi",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
