@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Bylaws/Arihany Method)
+name: Build FEXCore Nightly (Direct Clang Method)
 
 on:
   schedule:
@@ -17,7 +17,7 @@ jobs:
 
     - name: Setup Toolchain (Full LLVM-MinGW)
       run: |
-        # Download the full toolchain (contains the libraries missing from the docker container)
+        # Download the toolchain that contains the ARM64EC libraries
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 toolchain
@@ -37,7 +37,6 @@ jobs:
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # Matches the [Stable]-[Nightly]-[Hash] format you requested
         echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
@@ -51,11 +50,10 @@ jobs:
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # Absolute path to the raw 'clang' executable we just downloaded
+        # We explicitly point to the 'clang' executable that WE KNOW exists.
+        # We DO NOT use the toolchain file because it looks for the wrong names.
         TC_BIN="$(pwd)/toolchain/bin"
         
-        # CRITICAL FIX: We point explicitly to 'clang' and pass the architecture flags manually.
-        # This bypasses the "Compiler not found" error because we aren't looking for an alias.
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -120,7 +118,7 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip them using the toolchain we downloaded
+            # Strip
             "$TC_BIN/llvm-strip" --strip-all final_package/system32/libarm64ecfex.dll
             "$TC_BIN/llvm-strip" --strip-all final_package/system32/libwow64fex.dll
         else
