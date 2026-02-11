@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Stable container (Clang 19) to avoid libc++ linking errors
+    # VITAL: Use the stable 20240917 container to fix the 'GetActiveProcessorCount' linker error.
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -24,55 +24,49 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Patch FEX Source Code
-      # FIX: The FEX source has a typo in winnt.h where it uses a type name that doesn't match its definition.
-      # We use sed to replace the incorrect usage with the correct one (__IMAGE_LOAD_CONFIG_CODE_INTEGRITY).
+    - name: Patch WinNT Header
+      # This fixes the 'unknown type name' error by correcting the typo in the FEX source headers.
       run: |
-        sed -i 's/IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/g' Source/Windows/include/winnt.h
-        echo "Patch applied to Source/Windows/include/winnt.h"
+        sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (Official Method)
+    - name: Build FEXCore
       run: |
-        # Configure using the official toolchain
+        # Using the official toolchain file from the FEX repository.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
-        # Compile
         cmake --build build
-        
-        # Install (Generates the Thunks needed for Winlator)
         cmake --install build
 
     - name: Prepare Package
       run: |
         git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        BUILD_DATE=$(date +'%Y-%m-%d')
         
         mkdir -p packaging/system32
         
-        # 1. Copy DLLs
+        # Copy the Core and WOW64 bridge DLLs
         find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # 2. BLACK SCREEN FIX: Copy Thunks
-        # This copies the necessary JSON config files for graphics drivers
+        # Copy Thunk JSONs to prevent the "Black Screen" issue
         mkdir -p packaging/share/fex-emu
-        cp -r install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
+        cp -r install/share/fex-emu/* packaging/share/fex-emu/ || echo "Thunks not found"
         
-        # 3. Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly (Winlator)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
-          "author": "Blank",
+          "description": "FEXCore Nightly for Winlator\nBuilt from official toolchain",
+          "author": "FEX-Emu",
           "files": [
             { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
             { "source": "system32/libwow64fex.dll", "target": "\${system32}/libwow64fex.dll" },
@@ -83,13 +77,12 @@ jobs:
 
     - name: Create WCP Package
       run: |
-        git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
         tar -cJf FEXCore-Nightly-${COMMIT_HASH}.wcp -C packaging .
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: fexcore-nightly-build
+        name: fexcore-nightly
         path: |
           *.wcp
