@@ -24,34 +24,53 @@ jobs:
 
     - name: Setup LLVM-MinGW Toolchain
       run: |
-        # Download the specific release of LLVM-MinGW
+        # Download LLVM-MinGW
         wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
 
+    - name: Create Missing Compiler Wrappers
+      run: |
+        # The FEX build script looks for 'arm64ec-w64-mingw32-clang' which doesn't exist.
+        # We will create a wrapper script that calls 'clang' with the correct target.
+        
+        TOOLCHAIN_DIR="$(pwd)/llvm-mingw/bin"
+        
+        # 1. Create Wrapper for C Compiler (clang)
+        cat <<EOF > "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang"
+        #!/bin/sh
+        "$TOOLCHAIN_DIR/clang" --target=arm64ec-w64-mingw32 "\$@"
+        EOF
+        
+        # 2. Create Wrapper for C++ Compiler (clang++)
+        cat <<EOF > "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang++"
+        #!/bin/sh
+        "$TOOLCHAIN_DIR/clang++" --target=arm64ec-w64-mingw32 "\$@"
+        EOF
+        
+        # 3. Create Wrapper for GCC/G++ (FEX might fallback to these names)
+        cp "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang" "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-gcc"
+        cp "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-clang++" "$TOOLCHAIN_DIR/arm64ec-w64-mingw32-g++"
+        
+        # 4. Make them executable
+        chmod +x "$TOOLCHAIN_DIR"/arm64ec-w64-mingw32-*
+        
+        # 5. Verify they exist
+        ls -l "$TOOLCHAIN_DIR"/arm64ec*
+
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
-        # 1. Define absolute path to clang
-        TOOLCHAIN_PATH="$(pwd)/llvm-mingw"
-        CLANG_BIN="$TOOLCHAIN_PATH/bin/clang"
-        CLANGXX_BIN="$TOOLCHAIN_PATH/bin/clang++"
-        
-        # 2. Add to PATH just in case other tools (ar, ranlib) are needed
-        export PATH="$TOOLCHAIN_PATH/bin:$PATH"
+        export PATH="$(pwd)/llvm-mingw/bin:$PATH"
         
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # 3. Configure CMake with EXPLICIT compiler paths
-        # We override the toolchain's attempt to find the wrapper script.
+        # Now we can use the standard build command. 
+        # The toolchain file will find our wrapper scripts in the PATH.
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_C_COMPILER="$CLANG_BIN" \
-          -DCMAKE_CXX_COMPILER="$CLANGXX_BIN" \
-          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -60,23 +79,15 @@ jobs:
 
     - name: Build libwow64fex.dll (WOW64)
       run: |
-        TOOLCHAIN_PATH="$(pwd)/llvm-mingw"
-        CLANG_BIN="$TOOLCHAIN_PATH/bin/clang"
-        CLANGXX_BIN="$TOOLCHAIN_PATH/bin/clang++"
-        export PATH="$TOOLCHAIN_PATH/bin:$PATH"
+        export PATH="$(pwd)/llvm-mingw/bin:$PATH"
         
         mkdir build-wow64
         cd build-wow64
         
-        # Configure for AArch64 (WOW64)
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DCMAKE_C_COMPILER="$CLANG_BIN" \
-          -DCMAKE_CXX_COMPILER="$CLANGXX_BIN" \
-          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -90,14 +101,12 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy and Rename
-        # Note: We check both possible output names just to be safe
+        # Copy files (Checking multiple possible output names)
         [ -f build-arm64ec/libarm64ecfex.dll ] && cp build-arm64ec/libarm64ecfex.dll packaging/system32/libarm64ec.dll
         [ -f build-arm64ec/libarm64ec.dll ] && cp build-arm64ec/libarm64ec.dll packaging/system32/libarm64ec.dll
         
         [ -f build-wow64/libwow64fex.dll ] && cp build-wow64/libwow64fex.dll packaging/system32/libwow64fex.dll
         
-        # Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
