@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Winlator)
+name: Build FEXCore Nightly (Dual Pass)
 
 on:
   schedule:
@@ -8,13 +8,24 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: mstorsjo/llvm-mingw:20240917
+    # We do NOT use the container. We install the toolchain manually below.
 
     steps:
     - name: Install Dependencies
       run: |
-        apt-get update -y
-        apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools
+        sudo apt-get update -y
+        sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
+
+    - name: Setup LLVM-MinGW Toolchain (Full Release)
+      run: |
+        # 1. Download the FULL release. 
+        # The container we used before was "Lite" and missing ARM64EC libraries. This fixes that.
+        wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        
+        # 2. Add the toolchain to the system PATH
+        # This allows CMake to find 'clang', 'llvm-ar', and the missing 'arm64ec' targets.
+        echo "$(pwd)/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -31,7 +42,6 @@ jobs:
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # Format: [Tag]-Nightly-[Commit]
         echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
@@ -39,44 +49,71 @@ jobs:
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (Static)
+    # --- PASS 1: Build ARM64EC (Host Engine) ---
+    # This builds the main emulator core using the ARM64EC target we just downloaded.
+    - name: Build Pass 1 - ARM64EC
       run: |
-        # We use standard AArch64 because we know it compiles in this container.
-        # CRITICAL FIX: -static flags are added to prevent "Instant Shutdown" on the phone.
+        echo "::group::Building ARM64EC"
+        rm -rf build_ec
         
-        cmake -B build -G Ninja \
+        cmake -B build_ec -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+          -DENABLE_LTO=False \
+          -DBUILD_TESTING=False
+
+        cmake --build build_ec
+        echo "::endgroup::"
+
+    # --- PASS 2: Build AARCH64 (WOW64 Bridge) ---
+    # This builds the bridge that lets 32-bit apps talk to the 64-bit host.
+    - name: Build Pass 2 - AARCH64 (WOW64)
+      run: |
+        echo "::group::Building AARCH64"
+        rm -rf build_wow
+        
+        cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_SHARED_LINKER_FLAGS="-static" \
-          -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
-        cmake --build build
+        cmake --build build_wow
+        echo "::endgroup::"
 
     - name: Package & Strip
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # We grab the ONE file we built (libFEXCore.dll)
-        SOURCE_DLL=$(find build -name "libFEXCore.dll" | head -n 1)
+        # 1. Grab DLL from Pass 1 (ARM64EC) -> This IS libarm64ecfex.dll
+        DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
         
-        if [ -f "$SOURCE_DLL" ]; then
-            echo "Found FEXCore: $SOURCE_DLL"
+        # 2. Grab DLL from Pass 2 (AARCH64) -> This IS libwow64fex.dll
+        DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
+
+        if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
+            echo "Found EC Build: $DLL_EC"
+            echo "Found WOW Build: $DLL_WOW"
             
-            # 1. Strip it (Crucial for performance/memory)
-            llvm-strip --strip-all "$SOURCE_DLL" -o fex_stripped.dll
+            cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
+            cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # 2. Copy it to BOTH required names (This is the valid trick for Winlator)
-            cp fex_stripped.dll final_package/system32/libarm64ecfex.dll
-            cp fex_stripped.dll final_package/system32/libwow64fex.dll
-            
+            # Strip them (llvm-strip is in our PATH now)
+            llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
+            llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
-            echo "::error::Build failed! libFEXCore.dll was not produced."
+            echo "::error::Missing build outputs!"
+            echo "EC Build Found? $DLL_EC"
+            echo "WOW Build Found? $DLL_WOW"
             exit 1
         fi
 
@@ -86,7 +123,7 @@ jobs:
           "type": "FEXCore",
           "versionName": "${{ env.VERSION_NAME }}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nCommit: ${{ env.COMMIT_HASH }}\nOptimized for Winlator/Ludashi",
+          "description": "FEXCore Nightly Build\nCommit: ${{ env.COMMIT_HASH }}",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
