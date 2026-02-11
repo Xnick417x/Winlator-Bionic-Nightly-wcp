@@ -22,24 +22,49 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake ninja-build python3
 
-    # FIX: Use the official action. This handles ALL paths and libraries automatically.
     - name: Setup LLVM-MinGW Toolchain
-      uses: mstorsjo/setup-llvm-mingw@v1
-      with:
-        version: latest
+      run: |
+        # Download the toolchain manually (Proven to work)
+        wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 llvm-mingw
+        
+        # Add to PATH
+        echo "$(pwd)/llvm-mingw/bin" >> $GITHUB_PATH
+
+    - name: Create Custom Toolchain File
+      # This file tells CMake EXACTLY how to use the compiler, fixing the "missing libraries" error.
+      run: |
+        TOOLCHAIN_PATH="$(pwd)/llvm-mingw"
+        
+        cat <<EOF > custom_toolchain.cmake
+        set(CMAKE_SYSTEM_NAME Windows)
+        set(CMAKE_SYSTEM_PROCESSOR aarch64)
+        
+        # Force use of the clang binary we downloaded
+        set(CMAKE_C_COMPILER "$TOOLCHAIN_PATH/bin/clang")
+        set(CMAKE_CXX_COMPILER "$TOOLCHAIN_PATH/bin/clang++")
+        set(CMAKE_RC_COMPILER "$TOOLCHAIN_PATH/bin/llvm-windres")
+        
+        # IMPORTANT: Tell Clang where the libraries are (Sysroot)
+        set(CMAKE_SYSROOT "$TOOLCHAIN_PATH/aarch64-w64-mingw32")
+        
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+        EOF
 
     - name: Build libarm64ec.dll (ARM64EC)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # The action makes 'arm64ec-w64-mingw32-clang' available globally.
-        # We don't need to force paths or wrappers anymore.
-        
+        # We use our CUSTOM toolchain file, but override the Target Triple for EC
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_TOOLCHAIN_FILE=../custom_toolchain.cmake \
+          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -51,10 +76,12 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
+        # Use Custom toolchain, target is standard aarch64
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
+          -DCMAKE_TOOLCHAIN_FILE=../custom_toolchain.cmake \
+          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -68,13 +95,11 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy files (using 'find' to be safe against folder changes)
+        # Find and copy the DLLs (using find is safer than guessing paths)
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Verify files were copied (Optional debug step)
-        ls -R packaging/
-        
+        # Generate profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
