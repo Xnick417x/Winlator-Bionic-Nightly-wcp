@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # REVERT: Switching back to 'latest' matches Arihany's repo.
-    # This should contain the headers for RtlIsEcCode that 'stable' was missing.
     container: mstorsjo/llvm-mingw:latest
 
     steps:
@@ -25,6 +23,17 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Fix RtlIsEcCode (Source Patch)
+      # This fixes the "undeclared identifier" error by safely inserting the declaration
+      # before the FEXCore namespace starts. We use 'unsigned char' to avoid type issues.
+      run: |
+        sed -i '/namespace FEXCore/i extern "C" unsigned char RtlIsEcCode(unsigned long long);' FEXCore/Source/Interface/Core/Frontend.cpp
+
+    - name: Patch WinNT Header
+      # Fixes the typo in winnt.h to prevent compiler errors
+      run: |
+        sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
+
     - name: Create Toolchain File
       # We define the toolchain MANUALLY. This fixes the "Compiler Not Found" error
       # by mapping the standard triples to the container's internal paths.
@@ -38,18 +47,12 @@ jobs:
         set(CMAKE_CROSSCOMPILING TRUE)
         EOF
 
-    - name: Patch WinNT Header
-      # We keep this just in case, as it's a common typo fix in FEX source.
-      run: |
-        sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
-
     - name: Build FEXCore (ARM64EC)
       run: |
         # PATH FIX: Ensure the bin folder is explicitly in the path for this step
         export PATH="/opt/llvm-mingw/bin:$PATH"
         
-        # Build using the manual toolchain. 
-        # We DO NOT patch Frontend.cpp; 'latest' container should handle the intrinsics.
+        # Build using the manual toolchain.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=mingw_toolchain.cmake \
@@ -68,18 +71,16 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # Copy DLLs using the standard MinGW output names, renaming them to your JSON format
-        # In this container, they usually drop into 'build/Bin' or 'build'
-        
-        # Try to find them first to be safe
+        # Copy DLLs (Standard MinGW output names renamed to your format)
+        # We check multiple locations to be safe
         find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
         find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
         
-        # Fallback copy if 'find' is weird (Standard locations)
+        # Fallback if find fails (Explicit paths)
         [ ! -f final_package/system32/libarm64ecfex.dll ] && cp build/Bin/libFEXCore.dll final_package/system32/libarm64ecfex.dll || true
         [ ! -f final_package/system32/libwow64fex.dll ] && cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll || true
         
-        # Create profile.json (Matches your extracted working file & DXVK style)
+        # Create profile.json (Matches your uploaded file exactly)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
