@@ -8,12 +8,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Use the container that has the libraries
     container: mstorsjo/llvm-mingw:latest
 
     steps:
     - name: Install Dependencies
       run: |
         apt-get update -y
+        # Vital python packages for FEX scripts
         apt-get install -y git python3 python3-packaging python3-setuptools
 
     - name: Checkout FEX
@@ -28,21 +30,23 @@ jobs:
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # FIX: We add "-D_ARM64_" to C_FLAGS and CXX_FLAGS.
-        # This forces Windows headers to define '_CONTEXT' as the ARM64 structure (with Pc, X, V)
-        # instead of the default x64 structure (Rip, Rax) used by ARM64EC.
+        # KEY FIX: CMAKE_SYSTEM_PROCESSOR=AMD64
+        # Even though this is for ARM64 hardware, EC mode uses x64 data structures (CONTEXT with Rip, not Pc).
+        # This aligns the FEX source code with the Windows Headers.
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_SIZEOF_VOID_P=8 \
+          -DCMAKE_SYSTEM_PROCESSOR=AMD64 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld -D_ARM64_" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld -D_ARM64_" \
+          -DCMAKE_ASM_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_ASM_FLAGS="-target arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -54,18 +58,20 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        # Standard AArch64 build (No special defines needed)
+        # For WOW64, we ARE pure AArch64, so we keep PROCESSOR=aarch64
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_ASM_COMPILER=clang \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_C_FLAGS="-fuse-ld=lld" \
           -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_ASM_FLAGS="-target aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -80,11 +86,11 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy the DLLs
+        # Robust copy command
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Create profile.json
+        # Generate the profile.json required by Winlator
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
