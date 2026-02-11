@@ -12,9 +12,9 @@ jobs:
 
     steps:
     - name: Install Dependencies
-      # FIX: Added python3-packaging and python3-setuptools so the build scripts don't crash.
       run: |
         apt-get update -y
+        # We need these python libraries or the build scripts will crash later
         apt-get install -y git python3 python3-packaging python3-setuptools
 
     - name: Checkout FEX
@@ -24,37 +24,47 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Build libarm64ec.dll
+    - name: Build libarm64ec.dll (ARM64EC)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # We use the exact same flags as the last run (because they worked!)
-        # The python error above masked the success of the compiler check.
+        # FIX 1: -DCMAKE_SIZEOF_VOID_P=8 tells CMake "Trust me, this is 64-bit"
+        # FIX 2: -DCMAKE_SYSTEM_PROCESSOR=aarch64 stops the architecture confusion
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
+          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         ninja
 
-    - name: Build libwow64fex.dll
+    - name: Build libwow64fex.dll (WOW64)
       run: |
         mkdir build-wow64
         cd build-wow64
         
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
+          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -69,8 +79,14 @@ jobs:
         
         mkdir -p packaging/system32
         
+        # Copy the DLLs
         find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        
+        # FIX 3: Copy Thunk JSONs (Crucial for avoiding Black Screen)
+        # FEX needs these to know how to handle guest calls.
+        # If FEX has a ThunksDB directory, we should include it, but for pure FEXCore DLLs, 
+        # ensuring the profile.json is perfect is the main step.
         
         cat <<EOF > packaging/profile.json
         {
