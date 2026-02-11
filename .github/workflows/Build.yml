@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # We do NOT use the container line anymore. We install the toolchain manually below.
 
     steps:
     - name: Install Dependencies
@@ -16,21 +15,41 @@ jobs:
         sudo apt-get update -y
         sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
 
-    - name: Install LLVM-MinGW Toolchain (With ARM64EC Support)
-      run: |
-        # Download the full toolchain release that contains the ARM64EC libraries
-        wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        
-        # Add to PATH so CMake can find arm64ec-w64-mingw32-clang
-        echo "$(pwd)/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
-
     - name: Checkout FEX
       uses: actions/checkout@v4
       with:
         repository: FEX-Emu/FEX
         submodules: recursive
         fetch-depth: 0
+
+    - name: Setup LLVM-MinGW Toolchain (Manual)
+      run: |
+        # 1. Download the toolchain
+        wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        
+        # 2. Get the absolute path to the bin directory
+        TOOLCHAIN_PATH="$(pwd)/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64"
+        BIN_PATH="$TOOLCHAIN_PATH/bin"
+        
+        echo "Toolchain extracted to: $TOOLCHAIN_PATH"
+        
+        # 3. CRITICAL FIX: Create the missing arm64ec executable names
+        # FEX expects 'arm64ec-w64-mingw32-clang', but the download might only have 'clang'.
+        # We create symlinks so CMake finds what it wants.
+        
+        cd "$BIN_PATH"
+        
+        if [ ! -f "arm64ec-w64-mingw32-clang" ]; then
+            echo "Creating missing arm64ec symlinks..."
+            ln -s clang arm64ec-w64-mingw32-clang
+            ln -s clang++ arm64ec-w64-mingw32-clang++
+            ln -s clang arm64ec-w64-mingw32-gcc
+            ln -s clang++ arm64ec-w64-mingw32-g++
+        fi
+        
+        # 4. Add to GitHub PATH so subsequent steps can find it
+        echo "$BIN_PATH" >> $GITHUB_PATH
 
     - name: Generate Version Name
       id: version
@@ -54,7 +73,9 @@ jobs:
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # We use the Toolchain File now because we have the REAL toolchain installed
+        # Note: We now have 'arm64ec-w64-mingw32-clang' in the PATH thanks to the setup step.
+        # We assume the toolchain file will find it now.
+        
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -105,7 +126,7 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Using the toolchain's strip
+            # Using the toolchain's strip (which is now in PATH)
             llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
@@ -115,7 +136,7 @@ jobs:
             exit 1
         fi
 
-        # Generate profile.json
+        # Generate profile.json (Matches your known-good config)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
