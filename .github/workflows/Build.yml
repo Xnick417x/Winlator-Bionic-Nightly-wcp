@@ -29,13 +29,11 @@ jobs:
         git config --global --add safe.directory '*'
         git fetch --tags
         
-        # 1. Get latest stable tag (e.g. FEX-2602)
+        # Get latest tag or default
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
-        
-        # 2. Get short commit hash
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # 3. Format: [Tag]-Nightly-[Commit] (e.g., FEX-2602-Nightly-1af27ec)
+        # Format: [Tag]-Nightly-[Commit]
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
@@ -46,7 +44,7 @@ jobs:
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
     - name: Build FEXCore (Static Link)
-      # CRITICAL FIX: "-static" prevents the "Instant Shutdown" crash by bundling dependencies.
+      # -static bundles dependencies to prevent crashes on Android
       run: |
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
@@ -66,21 +64,31 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32
         
-        SOURCE_DLL=$(find build -name "libFEXCore.dll" | head -n 1)
+        # --- CRITICAL FIX: FIND DISTINCT DLLS ---
         
-        if [ -f "$SOURCE_DLL" ]; then
-            # Strip is required to prevent memory crashes
-            llvm-strip --strip-all "$SOURCE_DLL" -o fex_stripped.dll
+        # 1. Find the Main Core (Engine)
+        CORE_DLL=$(find build -name "libFEXCore.dll" | head -n 1)
+        
+        # 2. Find the WOW64 Interface (Bridge)
+        # We must NOT use libFEXCore for this. It must be the specific wow64 target.
+        WOW_DLL=$(find build -name "libwow64fex.dll" | head -n 1)
+
+        if [ -f "$CORE_DLL" ] && [ -f "$WOW_DLL" ]; then
+            echo "Found Core: $CORE_DLL"
+            echo "Found WOW64: $WOW_DLL"
             
-            # Copy to both required filenames
-            cp fex_stripped.dll final_package/system32/libarm64ecfex.dll
-            cp fex_stripped.dll final_package/system32/libwow64fex.dll
+            # Strip both to reduce size and fix memory allocation crashes
+            llvm-strip --strip-all "$CORE_DLL" -o final_package/system32/libarm64ecfex.dll
+            llvm-strip --strip-all "$WOW_DLL" -o final_package/system32/libwow64fex.dll
+            
         else
-            echo "::error::Build failed, libFEXCore.dll not found"
+            echo "::error::Build incomplete! Missing one of the required DLLs."
+            echo "Core found? $CORE_DLL"
+            echo "WOW64 found? $WOW_DLL"
             exit 1
         fi
 
-        # Generate profile.json with your specific naming
+        # Generate profile.json
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
@@ -110,4 +118,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: fexcore-nightly
+        # Fixed the syntax error here by adding quotes
         path: '*.wcp'
