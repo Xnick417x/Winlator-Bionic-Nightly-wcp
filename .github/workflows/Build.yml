@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Winlator)
+name: Build FEXCore Nightly (Dual Pass)
 
 on:
   schedule:
@@ -28,65 +28,79 @@ jobs:
       run: |
         git config --global --add safe.directory '*'
         git fetch --tags
-        
-        # 1. Get latest stable tag (e.g. FEX-2601)
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
-        
-        # 2. Get short commit hash
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # 3. Format: [Stable]-[Nightly]-[Commit]
-        # Example: FEX-2601-Nightly-1af27ec
-        VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
-        
-        echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+        # Format: [Tag]-Nightly-[Commit]
+        echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Apply Patches
+    - name: Patch WinNT Header
       run: |
-        # 1. Fix WinNT Header collision
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
-        
-        # 2. CRITICAL FIX: Rename FEXCore to libarm64ecfex internally
-        # This ensures libwow64fex knows to look for "libarm64ecfex.dll" instead of "libFEXCore.dll"
-        # We append the property set to the end of the FEXCore CMake file.
-        echo 'set_target_properties(FEXCore PROPERTIES OUTPUT_NAME arm64ecfex)' >> FEXCore/CMakeLists.txt
 
-    - name: Build FEXCore (Static Link)
-      # -static bundles dependencies. The patch above handles the naming.
+    # --- PASS 1: Build ARM64EC (For libarm64ecfex.dll) ---
+    - name: Build Pass 1 - ARM64EC
       run: |
-        cmake -B build -G Ninja \
+        echo "::group::Building ARM64EC"
+        rm -rf build_ec
+        cmake -B build_ec -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static" \
+          -DENABLE_LTO=False \
+          -DBUILD_TESTING=False
+
+        cmake --build build_ec
+        echo "::endgroup::"
+
+    # --- PASS 2: Build AARCH64 (For libwow64fex.dll) ---
+    - name: Build Pass 2 - AARCH64 (WOW64)
+      run: |
+        echo "::group::Building AARCH64"
+        rm -rf build_wow
+        cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
           -DMINGW_TRIPLE=aarch64-w64-mingw32 \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_SHARED_LINKER_FLAGS="-static" \
-          -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
-        cmake --build build
+        cmake --build build_wow
+        echo "::endgroup::"
 
     - name: Package & Strip
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # Find the files (They will now have the correct names from the build)
-        # Note: We look for arm64ecfex because of the patch
-        CORE_DLL=$(find build -name "libarm64ecfex.dll" | head -n 1)
-        WOW_DLL=$(find build -name "libwow64fex.dll" | head -n 1)
+        # 1. Grab DLL from Pass 1 (ARM64EC) -> Rename to libarm64ecfex.dll
+        DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
+        
+        # 2. Grab DLL from Pass 2 (AARCH64) -> Rename to libwow64fex.dll
+        DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
 
-        if [ -f "$CORE_DLL" ] && [ -f "$WOW_DLL" ]; then
-            echo "Found Core (Patched): $CORE_DLL"
-            echo "Found WOW64: $WOW_DLL"
+        if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
+            echo "Found EC Build: $DLL_EC"
+            echo "Found WOW Build: $DLL_WOW"
             
-            # Strip to fix memory crashes
-            llvm-strip --strip-all "$CORE_DLL" -o final_package/system32/libarm64ecfex.dll
-            llvm-strip --strip-all "$WOW_DLL" -o final_package/system32/libwow64fex.dll
+            # Copy and rename explicitly based on which build folder they came from
+            cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
+            cp "$DLL_WOW" final_package/system32/libwow64fex.dll
+            
+            # Strip them
+            llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
+            llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
-            echo "::error::Build incomplete! Missing DLLs. Did the rename patch fail?"
+            echo "::error::Missing build outputs!"
+            echo "EC Build Found? $DLL_EC"
+            echo "WOW Build Found? $DLL_WOW"
             exit 1
         fi
 
