@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL: Use the stable 20240917 container to fix the 'GetActiveProcessorCount' linker error.
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -25,13 +24,11 @@ jobs:
         fetch-depth: 0
 
     - name: Patch WinNT Header
-      # This fixes the 'unknown type name' error by correcting the typo in the FEX source headers.
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
     - name: Build FEXCore
       run: |
-        # Using the official toolchain file from the FEX repository.
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -45,32 +42,43 @@ jobs:
         cmake --build build
         cmake --install build
 
-    - name: Prepare Package
+    - name: Prepare Packaging Directory
       run: |
         git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +'%Y-%m-%d')
         
-        mkdir -p packaging/system32
+        mkdir -p final_package/system32
         
-        # Copy the Core and WOW64 bridge DLLs
-        find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
-        find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        # 1. Copy and Rename DLLs to match your working JSON
+        # We find 'libFEXCore.dll' and rename it to 'libarm64ecfex.dll'
+        find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
+        # The WOW64 bridge already builds with the correct name usually, but we force it here
+        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \; || \
+        find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
         
-        # Copy Thunk JSONs to prevent the "Black Screen" issue
-        mkdir -p packaging/share/fex-emu
-        cp -r install/share/fex-emu/* packaging/share/fex-emu/ || echo "Thunks not found"
+        # 2. Handle Thunks (The 'share' folder)
+        # We will keep these in system32/fex-emu to see if Winlator accepts them there
+        mkdir -p final_package/system32/fex-emu
+        cp -r install/share/fex-emu/* final_package/system32/fex-emu/ || echo "Thunks not found"
         
-        cat <<EOF > packaging/profile.json
+        # 3. Create profile.json with your preferred description
+        cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly for Winlator\nBuilt from official toolchain",
-          "author": "FEX-Emu",
+          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}\nOptimized for Snapdragon 8 Elite",
+          "author": "FEX-Emu / Gemini",
           "files": [
-            { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
-            { "source": "system32/libwow64fex.dll", "target": "\${system32}/libwow64fex.dll" },
-            { "source": "share/fex-emu", "target": "\${data}/fex-emu" }
+            {
+              "source": "system32/libarm64ecfex.dll",
+              "target": "\${system32}/libarm64ecfex.dll"
+            },
+            {
+              "source": "system32/libwow64fex.dll",
+              "target": "\${system32}/libwow64fex.dll"
+            }
           ]
         }
         EOF
@@ -78,7 +86,9 @@ jobs:
     - name: Create WCP Package
       run: |
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        tar -cJf FEXCore-Nightly-${COMMIT_HASH}.wcp -C packaging .
+        cd final_package
+        # We use 'tar' but ensure no extra prefix folders are added
+        tar -cJf ../FEXCore-Nightly-${COMMIT_HASH}.wcp .
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
