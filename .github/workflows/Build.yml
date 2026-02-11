@@ -23,28 +23,42 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    # ---------------------------------------------------------
-    # STEP 1: Build Core as PURE ARM64 (Proven to work)
-    # ---------------------------------------------------------
+    - name: Create Toolchain File
+      # This file forces ALL tools (Compiler, Linker, DLLTool) to use AArch64.
+      # This prevents the "Machine Type Conflict" error.
+      run: |
+        cat <<EOF > toolchain_aarch64.cmake
+        set(CMAKE_SYSTEM_NAME Windows)
+        set(CMAKE_SYSTEM_PROCESSOR aarch64)
+        
+        # Point to the tools in the container
+        set(TOOL_PREFIX "/opt/llvm-mingw/bin")
+        set(CMAKE_C_COMPILER "\${TOOL_PREFIX}/clang")
+        set(CMAKE_CXX_COMPILER "\${TOOL_PREFIX}/clang++")
+        set(CMAKE_RC_COMPILER "\${TOOL_PREFIX}/llvm-windres")
+        set(CMAKE_ASM_COMPILER "\${TOOL_PREFIX}/clang")
+        
+        # Crucial: Set the target triples so Clang knows what to build
+        set(CMAKE_C_COMPILER_TARGET "aarch64-w64-mingw32")
+        set(CMAKE_CXX_COMPILER_TARGET "aarch64-w64-mingw32")
+        set(CMAKE_ASM_COMPILER_TARGET "aarch64-w64-mingw32")
+        
+        # Force LLD (Linker)
+        set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+        set(CMAKE_MODULE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+        set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
+        EOF
+
     - name: Build libarm64ec.dll (Pure ARM64)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
+        # Build using our custom toolchain file
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_TOOLCHAIN_FILE=../toolchain_aarch64.cmake \
           -DCMAKE_SIZEOF_VOID_P=8 \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_ASM_COMPILER=clang \
-          -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DCMAKE_ASM_FLAGS="--target=aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -52,33 +66,17 @@ jobs:
         ninja
         ninja install
 
-    # ---------------------------------------------------------
-    # STEP 2: Build WOW64 as ARM64EC (To fix Linking Error)
-    # ---------------------------------------------------------
-    - name: Build libwow64fex.dll (ARM64EC + ARM64 Context)
+    - name: Build libwow64fex.dll (Pure ARM64)
       run: |
         mkdir build-wow64
         cd build-wow64
         
-        # KEY FLAGS:
-        # 1. Target = arm64ec-w64-mingw32 (Allows linking the x64 libs that caused your error)
-        # 2. -D_ARM64_ (Forces correct register names like 'Pc' instead of 'Rip')
-        # 3. ASM Target = arm64ec (Fixes "unknown flag .dr")
-        
+        # Reuse the same toolchain file. 
+        # Since it sets PROCESSOR=aarch64, dlltool will now correctly generate ARM64 import libs.
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_TOOLCHAIN_FILE=../toolchain_aarch64.cmake \
           -DCMAKE_SIZEOF_VOID_P=8 \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_ASM_COMPILER=clang \
-          -DCMAKE_C_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_ASM_COMPILER_TARGET="arm64ec-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld -D_ARM64_" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld -D_ARM64_" \
-          -DCMAKE_ASM_FLAGS="--target=arm64ec-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -93,22 +91,21 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy DLLs
-        # Note: We check both output names just in case
+        # 1. Copy DLLs
         find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Copy Thunks (Black Screen Fix)
+        # 2. BLACK SCREEN FIX: Copy Thunk Configs
         mkdir -p packaging/share/fex-emu
-        cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunk configs not found"
+        cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
         
-        # Create profile.json
+        # 3. Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly (Hybrid)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "FEXCore Nightly (Pure ARM64)\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
