@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # VITAL: Using the stable container to prevent the Clang 22 linker regression
+    # VITAL: Using the stable container to avoid the Clang 22 linker errors
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -24,26 +24,33 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Create Toolchain File
+      # We create a toolchain file that uses the standard aarch64 aliases
+      # but targets the Windows system name, which FEX uses to trigger the right build.
+      run: |
+        cat <<EOF > mingw_toolchain.cmake
+        set(CMAKE_SYSTEM_NAME Windows)
+        set(CMAKE_SYSTEM_PROCESSOR arm64ec)
+        set(CMAKE_C_COMPILER aarch64-w64-mingw32-clang)
+        set(CMAKE_CXX_COMPILER aarch64-w64-mingw32-clang++)
+        set(CMAKE_RC_COMPILER aarch64-w64-mingw32-windres)
+        set(CMAKE_CROSSCOMPILING TRUE)
+        EOF
+
     - name: Patch WinNT Header
-      # Fixes the typo in winnt.h to prevent compiler errors
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (Official ARM64EC)
+    - name: Build FEXCore
       run: |
-        # Ensure the compiler is in the PATH
-        export PATH="/opt/llvm-mingw/bin:$PATH"
-        
-        # We use the official toolchain but force CMAKE_SYSTEM_PROCESSOR to ARM64EC.
-        # This is the "No Start" fix—it ensures the DLLs have the correct entry points.
+        # Use our custom toolchain file to bypass the FEX 'not found' error
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_SYSTEM_PROCESSOR=ARM64EC \
-          -DCMAKE_INSTALL_PREFIX=./install \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
+          -DCMAKE_TOOLCHAIN_FILE=mingw_toolchain.cmake \
+          -D_WIN32_WINNT=0x0A00 \
+          -DENABLE_LTO=OFF \
+          -DBUILD_TESTING=OFF \
+          -DENABLE_ASSERTIONS=OFF
           
         cmake --build build
 
@@ -51,20 +58,22 @@ jobs:
       run: |
         git config --global --add safe.directory '*'
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +'%Y-%m-%d')
         
         mkdir -p final_package/system32
         
-        # 1. Copy DLLs (Matching your working JSON exactly)
-        cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
-        cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
+        # Copying DLLs using the names from your working JSON
+        # Note: In MinGW builds, the output is usually libFEXCore.dll and libwow64fex.dll
+        find build -name "libFEXCore.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
+        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
         
-        # 2. Create profile.json (Clean version, no extra folders)
+        # Create profile.json matching your extracted working file
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
           "versionName": "Nightly-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nTarget: ARM64EC",
+          "description": "FEXCore Nightly Release\nCommit: ${COMMIT_HASH}\nBuild Date: ${BUILD_DATE}",
           "author": "FEX-Emu / Gemini",
           "files": [
             {
