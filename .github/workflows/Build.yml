@@ -8,9 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # FIX: Use the specific 20240917 tag. 
-    # 'latest' uses Clang 22 (Dev) which breaks libc++ linking.
-    # 20240917 uses Clang 19 (Stable) which works perfectly.
+    # Stable container (Clang 19) to avoid libc++ linking errors
     container: mstorsjo/llvm-mingw:20240917
 
     steps:
@@ -26,11 +24,16 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Patch FEX Source Code
+      # FIX: The FEX source has a typo in winnt.h where it uses a type name that doesn't match its definition.
+      # We use sed to replace the incorrect usage with the correct one (__IMAGE_LOAD_CONFIG_CODE_INTEGRITY).
+      run: |
+        sed -i 's/IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY CodeIntegrity;/g' Source/Windows/include/winnt.h
+        echo "Patch applied to Source/Windows/include/winnt.h"
+
     - name: Build FEXCore (Official Method)
       run: |
-        # Using the stable container, we can use the standard Wiki build commands.
-        # This builds both the ARM64EC DLL and the WOW64 bridge.
-        
+        # Configure using the official toolchain
         cmake -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -39,9 +42,10 @@ jobs:
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
+        # Compile
         cmake --build build
         
-        # Install is required to generate the Thunk JSONs
+        # Install (Generates the Thunks needed for Winlator)
         cmake --install build
 
     - name: Prepare Package
@@ -57,7 +61,7 @@ jobs:
         find build -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
         # 2. BLACK SCREEN FIX: Copy Thunks
-        # This copies the JSON files from the install/share directory.
+        # This copies the necessary JSON config files for graphics drivers
         mkdir -p packaging/share/fex-emu
         cp -r install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
         
