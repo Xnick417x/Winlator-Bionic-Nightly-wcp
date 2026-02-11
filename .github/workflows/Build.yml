@@ -30,6 +30,8 @@ jobs:
         git fetch --tags
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        
+        # Matches your requested format: Stable-Nightly-Commit
         echo "VERSION_NAME=${LATEST_TAG}-Nightly-${COMMIT_HASH}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
@@ -43,7 +45,10 @@ jobs:
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # KEY FIX: -fuse-ld=lld tells clang to use the linker that supports arm64ecpe
+        # CRITICAL FIXES: 
+        # 1. -fuse-ld=lld: Forces use of the linker that supports ARM64EC.
+        # 2. -L.../aarch64-w64-mingw32/lib: Forces it to find the missing system libraries (kernel32, etc) in the AArch64 folder.
+        
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -53,10 +58,10 @@ jobs:
           -DCMAKE_RC_COMPILER=llvm-windres \
           -DCMAKE_AR=llvm-ar \
           -DCMAKE_RANLIB=llvm-ranlib \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld" \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld" \
+          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
+          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32 -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
+          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld -L/opt/llvm-mingw/aarch64-w64-mingw32/lib" \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
 
@@ -69,6 +74,7 @@ jobs:
         echo "::group::Building AARCH64"
         rm -rf build_wow
         
+        # Standard AARCH64 build (No library hacks needed here)
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -93,7 +99,10 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32
         
+        # 1. Grab DLL from Pass 1 (ARM64EC) -> Rename to libarm64ecfex.dll
         DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
+        
+        # 2. Grab DLL from Pass 2 (AARCH64) -> Rename to libwow64fex.dll
         DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
 
         if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
@@ -103,6 +112,7 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
+            # Use llvm-strip to be safe
             llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
@@ -112,6 +122,7 @@ jobs:
             exit 1
         fi
 
+        # Generate profile.json
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
