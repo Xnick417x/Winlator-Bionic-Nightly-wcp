@@ -11,10 +11,13 @@ jobs:
     container: mstorsjo/llvm-mingw:latest
 
     steps:
-    - name: Install Dependencies
+    - name: Prepare Environment
       run: |
         apt-get update -y
         apt-get install -y git python3 python3-packaging python3-setuptools
+        
+        # FIX: Add the toolchain binary folder to PATH so we can call the wrappers.
+        echo "/opt/llvm-mingw/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -23,49 +26,25 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Create Toolchain File
-      # FIX: We now define CMAKE_DLLTOOL explicitly.
-      # This ensures 'wow64.dll' and 'ntdll.dll' import libs are created for ARM64, not x64.
-      run: |
-        cat <<EOF > toolchain_aarch64.cmake
-        set(CMAKE_SYSTEM_NAME Windows)
-        set(CMAKE_SYSTEM_PROCESSOR aarch64)
-        
-        # Tools
-        set(TOOL_PREFIX "/opt/llvm-mingw/bin/aarch64-w64-mingw32-")
-        set(CMAKE_C_COMPILER "\${TOOL_PREFIX}clang")
-        set(CMAKE_CXX_COMPILER "\${TOOL_PREFIX}clang++")
-        set(CMAKE_RC_COMPILER "\${TOOL_PREFIX}windres")
-        set(CMAKE_ASM_COMPILER "\${TOOL_PREFIX}clang")
-        set(CMAKE_AR "\${TOOL_PREFIX}ar")
-        set(CMAKE_RANLIB "\${TOOL_PREFIX}ranlib")
-        
-        # CRITICAL FIX: Use the ARM64-specific dlltool
-        set(CMAKE_DLLTOOL "\${TOOL_PREFIX}dlltool")
-        
-        set(CMAKE_C_COMPILER_TARGET "aarch64-w64-mingw32")
-        set(CMAKE_CXX_COMPILER_TARGET "aarch64-w64-mingw32")
-        set(CMAKE_ASM_COMPILER_TARGET "aarch64-w64-mingw32")
-        
-        set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")
-        set(CMAKE_MODULE_LINKER_FLAGS_INIT "-fuse-ld=lld")
-        set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
-        EOF
-
     - name: Build libarm64ec.dll (Pure ARM64)
       run: |
         mkdir build-arm64ec
         cd build-arm64ec
         
-        cmake .. -G Ninja \
+        # USE THE WRAPPER: aarch64-w64-mingw32-cmake
+        # This wrapper automatically sets the correct compilers, linkers, and flags 
+        # (including avoiding the _assert error).
+        
+        aarch64-w64-mingw32-cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=../toolchain_aarch64.cmake \
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
           
         ninja
+        
+        # Install to generate the Thunk Configs (Critical for Black Screen Fix)
         ninja install
 
     - name: Build libwow64fex.dll (Pure ARM64)
@@ -73,9 +52,9 @@ jobs:
         mkdir build-wow64
         cd build-wow64
         
-        cmake .. -G Ninja \
+        # Use the same wrapper for the WOW64 bridge
+        aarch64-w64-mingw32-cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=../toolchain_aarch64.cmake \
           -DCMAKE_SIZEOF_VOID_P=8 \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
@@ -91,15 +70,17 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Copy DLLs
+        # 1. Copy DLLs
+        # The wrapper might output them to build-xxx/ or build-xxx/Bin/
         find build-arm64ec -name "libFEXCore.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
         find build-wow64 -name "libFEXCore.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
-        # Copy Thunks
+        # 2. BLACK SCREEN FIX: Copy Thunks
+        # We grab the 'share' folder created by 'ninja install' in step 1
         mkdir -p packaging/share/fex-emu
         cp -r build-arm64ec/install/share/fex-emu/* packaging/share/fex-emu/ || echo "Warning: Thunks not found"
         
-        # Create profile.json
+        # 3. Create profile.json
         cat <<EOF > packaging/profile.json
         {
           "type": "FEXCore",
