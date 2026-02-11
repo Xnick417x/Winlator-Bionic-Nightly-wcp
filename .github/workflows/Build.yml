@@ -15,15 +15,24 @@ jobs:
         sudo apt-get update -y
         sudo apt-get install -y git python3 ninja-build pkg-config python3-packaging python3-setuptools wget tar
 
-    - name: Setup Toolchain (Simulating setup-llvm.sh)
+    - name: Setup Toolchain (The "Bylaws" Fix)
       run: |
-        # 1. Download the Bylaws/LLVM-MinGW Toolchain (Specific version used by FEX)
+        # 1. Download the toolchain
         wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240917/llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64.tar.xz
         mv llvm-mingw-20240917-ucrt-ubuntu-20.04-x86_64 toolchain
         
-        # 2. Add to PATH so the build script can find 'clang', 'llvm-ar', etc.
-        echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
+        # 2. CRITICAL STEP: Create the missing symlinks
+        # This is what allows us to use FEX's toolchain file like Arihany does.
+        cd toolchain/bin
+        ln -sf clang arm64ec-w64-mingw32-clang
+        ln -sf clang++ arm64ec-w64-mingw32-clang++
+        ln -sf llvm-ar arm64ec-w64-mingw32-ar
+        ln -sf llvm-windres arm64ec-w64-mingw32-windres
+        ln -sf llvm-strip arm64ec-w64-mingw32-strip
+        
+        # 3. Add to PATH
+        echo "$(pwd)" >> $GITHUB_PATH
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -58,23 +67,12 @@ jobs:
         echo "::group::Building ARM64EC"
         rm -rf build_ec
         
-        # We use direct pathing to clang to avoid "Compiler not found" errors
-        # We assume the toolchain we downloaded is valid
-        TC_BIN="$(pwd)/toolchain/bin"
-        
+        # We use Arihany's exact CMake arguments now that the toolchain is patched
         cmake -B build_ec -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER="$TC_BIN/clang" \
-          -DCMAKE_CXX_COMPILER="$TC_BIN/clang++" \
-          -DCMAKE_RC_COMPILER="$TC_BIN/llvm-windres" \
-          -DCMAKE_AR="$TC_BIN/llvm-ar" \
-          -DCMAKE_RANLIB="$TC_BIN/llvm-ranlib" \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=arm64ec-w64-mingw32" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld --target=arm64ec-w64-mingw32" \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld --target=arm64ec-w64-mingw32" \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -87,21 +85,12 @@ jobs:
       run: |
         echo "::group::Building AARCH64"
         rm -rf build_wow
-        TC_BIN="$(pwd)/toolchain/bin"
         
         cmake -B build_wow -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_C_COMPILER="$TC_BIN/clang" \
-          -DCMAKE_CXX_COMPILER="$TC_BIN/clang++" \
-          -DCMAKE_RC_COMPILER="$TC_BIN/llvm-windres" \
-          -DCMAKE_AR="$TC_BIN/llvm-ar" \
-          -DCMAKE_RANLIB="$TC_BIN/llvm-ranlib" \
-          -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
-          -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00 --target=aarch64-w64-mingw32" \
-          -DCMAKE_SHARED_LINKER_FLAGS="-static -fuse-ld=lld --target=aarch64-w64-mingw32" \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -fuse-ld=lld --target=aarch64-w64-mingw32" \
+          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
+          -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
           -DENABLE_LTO=False \
           -DBUILD_TESTING=False
@@ -113,8 +102,11 @@ jobs:
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
-        TC_BIN="$(pwd)/toolchain/bin"
         
+        # Use the stripped tool directly from our toolchain
+        STRIP_TOOL="$(pwd)/toolchain/bin/llvm-strip"
+        
+        # 1. Grab files
         DLL_EC=$(find build_ec -name "libFEXCore.dll" | head -n 1)
         DLL_WOW=$(find build_wow -name "libFEXCore.dll" | head -n 1)
 
@@ -125,9 +117,9 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip using the correct tool
-            "$TC_BIN/llvm-strip" --strip-all final_package/system32/libarm64ecfex.dll
-            "$TC_BIN/llvm-strip" --strip-all final_package/system32/libwow64fex.dll
+            # Strip
+            "$STRIP_TOOL" --strip-all final_package/system32/libarm64ecfex.dll
+            "$STRIP_TOOL" --strip-all final_package/system32/libwow64fex.dll
         else
             echo "::error::Build incomplete! Missing DLLs."
             exit 1
