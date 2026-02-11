@@ -25,21 +25,21 @@ jobs:
         fetch-depth: 0
 
     - name: Patch WinNT Header
-      # Fixes the typo in winnt.h as required for stable compilers.
       run: |
         sed -i 's/\bIMAGE_LOAD_CONFIG_CODE_INTEGRITY/__IMAGE_LOAD_CONFIG_CODE_INTEGRITY/g' Source/Windows/include/winnt.h
 
-    - name: Build FEXCore (Official ARM64EC)
+    - name: Build FEXCore (ARM64EC)
       run: |
-        # Hard-coding the path and triple variables so CMake can't fail to find them.
-        # This uses the official toolchain file (Data/CMake/toolchain_mingw.cmake).
+        # We define the toolchain MANUALLY here to bypass the FEX script's auto-detection.
+        # This is the only way to force the absolute paths AND the arm64ec target.
         
         cmake -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=arm64ec \
           -DCMAKE_C_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang \
           -DCMAKE_CXX_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang++ \
+          -DCMAKE_ASM_COMPILER=/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_C_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DCMAKE_CXX_FLAGS="-D_WIN32_WINNT=0x0A00" \
           -DENABLE_LTO=False \
@@ -55,12 +55,16 @@ jobs:
         
         mkdir -p final_package/system32
         
-        # Copy DLLs (Matching your working JSON exactly).
-        # Building as ARM64EC creates the libarm64ecfex.dll hybrid binary.
-        cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll
-        cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll
+        # Copy DLLs (Matching your working JSON names exactly).
+        # We find the files to be safe regardless of where Ninja puts them.
+        find build -name "libarm64ecfex.dll" -exec cp {} final_package/system32/libarm64ecfex.dll \;
+        find build -name "libwow64fex.dll" -exec cp {} final_package/system32/libwow64fex.dll \;
         
-        # profile.json (Clean, no share folder, matches your provided working file).
+        # If the find failed, try the standard location
+        [ ! -f final_package/system32/libarm64ecfex.dll ] && cp build/Bin/libarm64ecfex.dll final_package/system32/libarm64ecfex.dll || true
+        [ ! -f final_package/system32/libwow64fex.dll ] && cp build/Bin/libwow64fex.dll final_package/system32/libwow64fex.dll || true
+        
+        # 2. Create profile.json (Matches your provided working version)
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
