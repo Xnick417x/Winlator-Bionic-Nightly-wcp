@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Dual Variants v3.0b)
+name: Build VKD3D-Proton (Dual v3.0b - Fixed JSON)
 
 on:
   workflow_dispatch:
@@ -8,8 +8,6 @@ on:
 jobs:
   # ==================================================================
   # JOB 1: STANDARD BUILD (x64 + x86)
-  # Artifact: VKD3D-Proton-v3.0b-Standard-...
-  # Structure: system32 (x64) | syswow64 (x86)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -44,8 +42,8 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Forced v3.0b label as requested
-        echo "VERSION_NAME=VKD3D-Proton-v3.0b-Standard-${COMMIT_HASH}" >> $GITHUB_ENV
+        # Forced v3.0b label
+        echo "VERSION_NAME=3.0b-Standard-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build Standard
       run: |
@@ -97,20 +95,21 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
-        # 1. x64 -> system32
+        # Copy DLLs
         find src/build-x64 -name "d3d12.dll" -exec cp {} final_package/system32/ \;
         find src/build-x64 -name "d3d12core.dll" -exec cp {} final_package/system32/ \;
-        
-        # 2. x86 -> syswow64
         find src/build-x86 -name "d3d12.dll" -exec cp {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp {} final_package/syswow64/ \;
         
-        # Profile (Fixed Type)
+        # FIX: Simplified JSON. Added ID. Removed special chars.
         cat <<EOF > final_package/profile.json
         {
+          "id": "vkd3d-proton-standard",
+          "name": "VKD3D-Proton Standard",
           "type": "VKD3D",
           "versionName": "${{ env.VERSION_NAME }}",
-          "description": "VKD3D (Standard x64/x86)\\n${{ env.VERSION_NAME }}",
+          "versionCode": ${{ github.run_number }},
+          "description": "Standard x64/x86 Build",
           "files": [
             {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
             {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
@@ -121,7 +120,7 @@ jobs:
         EOF
         
         cd final_package
-        tar -cJf ../${{ env.VERSION_NAME }}.wcp .
+        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp .
 
     - name: Upload Standard Artifact
       uses: actions/upload-artifact@v4
@@ -132,8 +131,6 @@ jobs:
 
   # ==================================================================
   # JOB 2: ARM64EC BUILD (Native/Hybrid)
-  # Artifact: VKD3D-Proton-v3.0b-ARM64EC-...
-  # Structure: system32 (ARM64EC) | syswow64 (x86)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -168,12 +165,10 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Forced v3.0b label as requested
-        echo "VERSION_NAME=VKD3D-Proton-v3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
+        echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build ARM64EC
       run: |
-        # ARM64EC Cross File
         cat <<EOF > cross-arm64ec.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang'
@@ -191,7 +186,6 @@ jobs:
         endian = 'little'
         EOF
 
-        # x86 Cross File
         cat <<EOF > cross-x86.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -221,20 +215,20 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
-        # 1. ARM64EC -> system32
         find src/build-ec -name "d3d12.dll" -exec cp {} final_package/system32/ \;
         find src/build-ec -name "d3d12core.dll" -exec cp {} final_package/system32/ \;
-        
-        # 2. x86 -> syswow64
         find src/build-x86 -name "d3d12.dll" -exec cp {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp {} final_package/syswow64/ \;
         
-        # Profile (Fixed Type)
+        # FIX: Simplified JSON. Added ID. Removed special chars.
         cat <<EOF > final_package/profile.json
         {
+          "id": "vkd3d-proton-arm64ec",
+          "name": "VKD3D-Proton ARM64EC",
           "type": "VKD3D",
           "versionName": "${{ env.VERSION_NAME }}",
-          "description": "VKD3D (Native ARM64EC)\\n${{ env.VERSION_NAME }}",
+          "versionCode": ${{ github.run_number }},
+          "description": "Native ARM64EC Build",
           "files": [
             {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
             {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
@@ -245,7 +239,7 @@ jobs:
         EOF
         
         cd final_package
-        tar -cJf ../${{ env.VERSION_NAME }}.wcp .
+        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp .
 
     - name: Upload ARM64EC Artifact
       uses: actions/upload-artifact@v4
