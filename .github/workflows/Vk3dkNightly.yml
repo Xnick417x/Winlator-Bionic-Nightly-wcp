@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton Nightly (Fix WIDL)
+name: Build VKD3D-Proton Nightly (Dual Artifacts)
 
 on:
   workflow_dispatch:
@@ -6,9 +6,9 @@ on:
     - cron: "0 18 * * *"
 
 jobs:
-  build:
+  # JOB 1: Regular x86/x64 Build (Standard Emulation)
+  build-regular:
     runs-on: ubuntu-latest
-
     steps:
     - name: Install Dependencies
       run: |
@@ -22,16 +22,13 @@ jobs:
       run: |
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
-        
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-        
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-        
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-    - name: Checkout VKD3D-Proton
+    - name: Checkout VKD3D
       uses: actions/checkout@v4
       with:
         repository: HansKristian-Work/vkd3d-proton
@@ -40,24 +37,15 @@ jobs:
         path: src
 
     - name: Generate Version Name
-      id: version
       run: |
-        git config --global --add safe.directory '*'
         cd src
-        git fetch --tags --force
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v2.13")
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        
-        VERSION_NAME="VKD3D-Proton-${LATEST_TAG}-Nightly-${COMMIT_HASH}"
-        
-        echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+        echo "VERSION_NAME=VKD3D-Proton-${LATEST_TAG}-Standard-${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Create Cross Files
+    - name: Build (x86 & x64)
       run: |
-        # FIX: Added 'widl' entry explicitly pointing to the toolchain binary.
-        # FIX: Changed 'pkgconfig' to 'pkg-config' to silence deprecation warning.
-        
-        # 64-bit Cross File
+        # Cross Files
         cat <<EOF > cross-x64.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang'
@@ -75,7 +63,6 @@ jobs:
         endian = 'little'
         EOF
 
-        # 32-bit Cross File
         cat <<EOF > cross-x86.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -93,76 +80,137 @@ jobs:
         endian = 'little'
         EOF
 
-    - name: Build VKD3D
-      run: |
         cd src
-        
-        # 1. Build x64
-        meson setup build-x64 --cross-file ../cross-x64.txt \
-          -Dbuildtype=release \
-          -Dstrip=true
+        meson setup build-x64 --cross-file ../cross-x64.txt -Dbuildtype=release -Dstrip=true
         ninja -C build-x64
-        
-        # 2. Build x86
-        meson setup build-x86 --cross-file ../cross-x86.txt \
-          -Dbuildtype=release \
-          -Dstrip=true
+        meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
         ninja -C build-x86
 
-    - name: Package
+    - name: Package Standard
       run: |
         rm -rf final_package
         mkdir -p final_package/x64
         mkdir -p final_package/x86
         
-        # Copy x64 DLLs
-        cp src/build-x64/libs/vkd3d/libvkd3d-1.dll final_package/x64/libvkd3d-1.dll || echo "x64 libvkd3d missing"
-        cp src/build-x64/libs/vkd3d-shader/libvkd3d-shader-1.dll final_package/x64/libvkd3d-shader-1.dll || echo "x64 shader missing"
-        cp src/build-x64/libs/d3d12/d3d12.dll final_package/x64/d3d12.dll
-        cp src/build-x64/libs/d3d12/d3d12core.dll final_package/x64/d3d12core.dll
+        # SMART COPY: Finds the DLLs wherever they are
+        find src/build-x64 -name "d3d12.dll" -exec cp {} final_package/x64/ \;
+        find src/build-x64 -name "d3d12core.dll" -exec cp {} final_package/x64/ \;
+        find src/build-x86 -name "d3d12.dll" -exec cp {} final_package/x86/ \;
+        find src/build-x86 -name "d3d12core.dll" -exec cp {} final_package/x86/ \;
         
-        # Copy x86 DLLs
-        cp src/build-x86/libs/vkd3d/libvkd3d-1.dll final_package/x86/libvkd3d-1.dll || echo "x86 libvkd3d missing"
-        cp src/build-x86/libs/vkd3d-shader/libvkd3d-shader-1.dll final_package/x86/libvkd3d-shader-1.dll || echo "x86 shader missing"
-        cp src/build-x86/libs/d3d12/d3d12.dll final_package/x86/d3d12.dll
-        cp src/build-x86/libs/d3d12/d3d12core.dll final_package/x86/d3d12core.dll
-
-        # Generate Profile JSON
+        # Profile
         cat <<EOF > final_package/profile.json
         {
           "type": "D3D12",
           "versionName": "${{ env.VERSION_NAME }}",
-          "versionCode": ${{ github.run_number }},
-          "description": "VKD3D-Proton Nightly\\n${{ env.VERSION_NAME }}",
-          "author": "HansKristian-Work / Gemini",
+          "description": "VKD3D (Standard x86/x64)\\n${{ env.VERSION_NAME }}",
           "files": [
-            {
-              "source": "x64/d3d12.dll",
-              "target": "\${system32}/d3d12.dll"
-            },
-            {
-              "source": "x64/d3d12core.dll",
-              "target": "\${system32}/d3d12core.dll"
-            },
-            {
-              "source": "x86/d3d12.dll",
-              "target": "\${syswow64}/d3d12.dll"
-            },
-            {
-              "source": "x86/d3d12core.dll",
-              "target": "\${syswow64}/d3d12core.dll"
-            }
+            {"source": "x64/d3d12.dll", "target": "\${system32}/d3d12.dll"},
+            {"source": "x64/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
+            {"source": "x86/d3d12.dll", "target": "\${syswow64}/d3d12.dll"},
+            {"source": "x86/d3d12core.dll", "target": "\${syswow64}/d3d12core.dll"}
           ]
         }
         EOF
-
-    - name: Create WCP
-      run: |
+        
         cd final_package
         tar -cJf ../${{ env.VERSION_NAME }}.wcp .
 
-    - name: Upload Artifact
+    - name: Upload Standard Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: vkd3d-nightly
+        name: vkd3d-standard
+        path: '*.wcp'
+
+
+  # JOB 2: ARM64 Build (Native/Bridge)
+  build-arm64:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y --no-install-recommends \
+          ca-certificates curl xz-utils jq git glslang-tools \
+          build-essential python3 python3-pip pkg-config \
+          meson ninja-build zstd
+
+    - name: Setup Toolchain
+      run: |
+        LLVM_MINGW_TAG="20251104"
+        TOOLCHAIN_DIR="/opt/llvm-mingw"
+        wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
+        sudo rm -rf "$TOOLCHAIN_DIR"
+        sudo mkdir -p "$TOOLCHAIN_DIR"
+        sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
+        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+
+    - name: Checkout VKD3D
+      uses: actions/checkout@v4
+      with:
+        repository: HansKristian-Work/vkd3d-proton
+        submodules: recursive
+        fetch-depth: 0
+        path: src
+
+    - name: Generate Version Name
+      run: |
+        cd src
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v2.13")
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        echo "VERSION_NAME=VKD3D-Proton-${LATEST_TAG}-ARM64-${COMMIT_HASH}" >> $GITHUB_ENV
+
+    - name: Build (ARM64)
+      run: |
+        # ARM64 Cross File
+        cat <<EOF > cross-arm64.txt
+        [binaries]
+        c = '/opt/llvm-mingw/bin/aarch64-w64-mingw32-clang'
+        cpp = '/opt/llvm-mingw/bin/aarch64-w64-mingw32-clang++'
+        ar = '/opt/llvm-mingw/bin/llvm-ar'
+        strip = '/opt/llvm-mingw/bin/llvm-strip'
+        windres = '/opt/llvm-mingw/bin/aarch64-w64-mingw32-windres'
+        widl = '/opt/llvm-mingw/bin/aarch64-w64-mingw32-widl'
+        pkg-config = 'pkg-config'
+        exe_wrapper = ['wine']
+        [host_machine]
+        system = 'windows'
+        cpu_family = 'aarch64'
+        cpu = 'aarch64'
+        endian = 'little'
+        EOF
+
+        cd src
+        meson setup build-arm64 --cross-file ../cross-arm64.txt -Dbuildtype=release -Dstrip=true
+        ninja -C build-arm64
+
+    - name: Package ARM64
+      run: |
+        rm -rf final_package
+        mkdir -p final_package/system32
+        
+        # SMART COPY
+        find src/build-arm64 -name "d3d12.dll" -exec cp {} final_package/system32/ \;
+        find src/build-arm64 -name "d3d12core.dll" -exec cp {} final_package/system32/ \;
+        
+        # Profile
+        cat <<EOF > final_package/profile.json
+        {
+          "type": "D3D12",
+          "versionName": "${{ env.VERSION_NAME }}",
+          "description": "VKD3D (Native ARM64)\\n${{ env.VERSION_NAME }}",
+          "files": [
+            {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
+            {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"}
+          ]
+        }
+        EOF
+        
+        cd final_package
+        tar -cJf ../${{ env.VERSION_NAME }}.wcp .
+
+    - name: Upload ARM64 Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vkd3d-arm64
         path: '*.wcp'
