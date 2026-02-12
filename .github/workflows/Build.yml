@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Exact)
+name: Build FEXCore Nightly (Arihany Structure Fix)
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
 
     steps:
     - name: Install Dependencies
-      # Sourced directly from: install-deps-ubuntu.sh
+      #
       run: |
         sudo apt-get update -y
         sudo apt-get install -y --no-install-recommends \
@@ -21,20 +21,17 @@ jobs:
           llvm crossbuild-essential-arm64
 
     - name: Setup Toolchain
-      # Sourced directly from: setup-llvm.sh
+      #
       run: |
-        # Exact version Arihany uses
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         
-        # Download the specific Ubuntu 22.04 version (Crucial for correct binaries)
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
         
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
         
-        # Add to PATH (We trust this version has the correct binaries)
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
@@ -43,11 +40,13 @@ jobs:
         repository: FEX-Emu/FEX
         submodules: recursive
         fetch-depth: 0
+        path: src  # Checkout into 'src' folder to match Arihany's structure
 
     - name: Generate Version Name
       id: version
       run: |
         git config --global --add safe.directory '*'
+        cd src
         git fetch --tags --force
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
         COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -58,8 +57,9 @@ jobs:
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build FEXCore
-      # Logic sourced from x86-fexcore.yml
+      # Logic from x86-fexcore.yml
       run: |
+        # Define build function exactly as she does
         build_arch() {
           local triple="$1"
           local dest="$2"
@@ -67,40 +67,57 @@ jobs:
           
           echo "::group::Building $triple"
           
-          # STRICT flags. No -static. No header patch.
-          cmake -B "$build_dir" -G Ninja -Wno-dev \
+          # Create and enter build dir
+          rm -rf "$build_dir"
+          mkdir "$build_dir"
+          cd "$build_dir"
+          
+          # STRICT flags. No -static. No patches.
+          cmake -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
             -DMINGW_TRIPLE="${triple}-w64-mingw32" \
             -DCMAKE_INSTALL_PREFIX=/usr \
             -DCMAKE_INSTALL_LIBDIR=/usr/lib/wine/aarch64-windows \
             -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
             -DENABLE_LTO=False \
             -DENABLE_ASSERTIONS=False \
-            -DBUILD_TESTING=False
+            -DBUILD_TESTING=False \
+            ..
 
-          ninja -C "$build_dir"
+          ninja
           
-          # Install to 'stage' folder (Matches Arihany's logic)
-          DESTDIR="$(pwd)/$dest" ninja -C "$build_dir" install
+          # Install using relative path (Matches her script structure)
+          # ../../stage-ec puts it in root/stage-ec
+          DESTDIR="$dest" ninja install
+          
+          cd .. # Go back to src
           echo "::endgroup::"
         }
 
+        # We must be inside 'src' to run this, just like her script
+        cd src
+        
         # Build Pass 1: ARM64EC (Host)
-        build_arch "arm64ec" "stage-ec"
+        # Installs to ../stage-ec (which is root/stage-ec)
+        build_arch "arm64ec" "../../stage-ec"
         
         # Build Pass 2: AARCH64 (Bridge)
-        build_arch "aarch64" "stage-wo"
+        # Installs to ../stage-wo (which is root/stage-wo)
+        build_arch "aarch64" "../../stage-wo"
 
     - name: Package
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # FIX: Locate the DLLs in the STAGE folders where ninja installed them.
-        echo "Searching for DLLs..."
-        DLL_EC=$(find stage-ec -type f -name 'libFEXCore.dll' | head -n 1)
-        DLL_WOW=$(find stage-wo -type f -name 'libFEXCore.dll' | head -n 1)
+        echo "DEBUG: Listing stage folders to verify content:"
+        ls -R stage-ec || echo "stage-ec missing"
+        ls -R stage-wo || echo "stage-wo missing"
+        
+        # FIX: Find any DLL in the stage folders (Recursive search)
+        DLL_EC=$(find stage-ec -type f -name '*.dll' | head -n 1)
+        DLL_WOW=$(find stage-wo -type f -name '*.dll' | head -n 1)
         
         if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
             echo "Found EC: $DLL_EC"
@@ -109,13 +126,11 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Using llvm-strip from the configured toolchain
-            llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
-            llvm-strip --strip-all final_package/system32/libwow64fex.dll
+            # Using llvm-strip from the toolchain
+            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
+            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
             echo "::error::Missing DLLs in stage folders!"
-            echo "Contents of stage-ec:"
-            ls -R stage-ec || true
             exit 1
         fi
         
