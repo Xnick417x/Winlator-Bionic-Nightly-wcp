@@ -22,6 +22,7 @@ jobs:
 
     - name: Setup Toolchain
       run: |
+        # Using the same toolchain setup as standard build
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -123,7 +124,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Arihany Logic + Dynamic JSON)
+  # JOB 2: ARM64EC BUILD (INLINED ARIHANY SCRIPTS + FIXES)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -137,11 +138,12 @@ jobs:
           meson ninja-build zstd
 
     - name: Setup Toolchain (STABLE)
-      # FIX: Use 20240619 (Stable) instead of Nightly to match working builds
+      # Fix for "Exit Code 8": Using 20.04 UCRT release which is more stable on Actions
       run: |
-        LLVM_MINGW_TAG="20240619"
+        LLVM_MINGW_TAG="20240606"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
-        wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
+        # Download with retry and verbose output to debug download fails
+        wget -q --tries=3 "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-20.04-x86_64.tar.xz" -O llvm.tar.xz
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
@@ -163,7 +165,7 @@ jobs:
 
     - name: Build ARM64EC & x86
       run: |
-        # 1. Define ARM64EC Cross File
+        # 1. Define ARM64EC Cross File (Matches Arihany's guts-arm64ec.sh)
         cat <<EOF > cross-arm64ec.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang'
@@ -201,7 +203,8 @@ jobs:
 
         cd src
         
-        # === ARIHANY METHOD: LTO OFF, STRIP OFF ===
+        # === ARIHANY LOGIC: LTO OFF, STRIP OFF ===
+        # This prevents the "Revert to None" error by keeping PE headers valid
         echo "::group::Building ARM64EC"
         meson setup build-ec \
           --cross-file ../cross-arm64ec.txt \
@@ -209,9 +212,6 @@ jobs:
           -Dstrip=false \
           -Db_lto=false
         ninja -C build-ec
-        
-        # USE MESON INSTALL (Clean extraction of files)
-        meson install -C build-ec --destdir ../staging-ec
         echo "::endgroup::"
         
         echo "::group::Building x86"
@@ -221,7 +221,6 @@ jobs:
           -Dstrip=true \
           -Db_lto=true
         ninja -C build-x86
-        meson install -C build-x86 --destdir ../staging-x86
         echo "::endgroup::"
 
     - name: Package with Dynamic JSON
@@ -230,16 +229,17 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
-        # 1. MOVE FILES (From "staging" not "find")
-        # This mirrors how official releases are packaged
-        cp -L staging-ec/usr/local/bin/*.dll final_package/system32/
-        cp -L staging-x86/usr/local/bin/*.dll final_package/syswow64/
+        # 1. Grab everything (dlls) using wildcards
+        # We copy from the build folder directly
+        find src/build-ec -name "*.dll" -exec cp -L {} final_package/system32/ \;
+        find src/build-x86 -name "*.dll" -exec cp -L {} final_package/syswow64/ \;
 
-        # 2. MANUAL STRIP (Clean up the binaries safely)
+        # 2. MANUAL STRIP (The "Arihany Strip Fix")
+        # We use llvm-strip --strip-unneeded. Standard strip corrupts the file.
         echo "Stripping ARM64EC binaries..."
         /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
 
-        # 3. DYNAMIC JSON (Your requested logic)
+        # 3. DYNAMIC JSON
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -247,11 +247,10 @@ jobs:
             type: "VKD3D",
             versionName: $vn,
             versionCode: 0,
-            description: "vkd3d-proton (ARM Native + Arihany Build)",
+            description: "vkd3d-proton (ARM Native + Arihany Fixes)",
             files: []
           }' > final_package/profile.json
 
-        # Scan files and populate JSON
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL_PATH=${f#final_package/}
@@ -264,6 +263,7 @@ jobs:
         done
 
         # 4. FIX PERMISSIONS & PACKAGE
+        # Important: chmod 777 prevents Android "Access Denied" errors
         chmod -R 777 final_package
         cd final_package
         tar --owner=0 --group=0 -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
