@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Confirmed Standard + Arihany ARM64EC Fix)
+name: Build VKD3D-Proton (Dual v3.0b - Repaired)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (Restored to working "Clean Paths" version)
+  # JOB 1: STANDARD BUILD (Restored to your confirmed working state)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -18,7 +18,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends \
           ca-certificates curl xz-utils jq git glslang-tools \
           build-essential python3 python3-pip pkg-config \
-          meson ninja-build zstd [cite: 66]
+          meson ninja-build zstd [cite: 35]
 
     - name: Setup Toolchain
       run: |
@@ -28,7 +28,7 @@ jobs:
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH [cite: 67]
+        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH [cite: 36]
 
     - name: Checkout VKD3D
       uses: actions/checkout@v4
@@ -36,13 +36,13 @@ jobs:
         repository: HansKristian-Work/vkd3d-proton
         submodules: recursive
         fetch-depth: 0
-        [cite_start]path: src [cite: 68]
+        [cite_start]path: src [cite: 37]
 
     - name: Generate Version Name
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        echo "VERSION_NAME=3.0b-${COMMIT_HASH}" >> $GITHUB_ENV [cite: 69]
+        echo "VERSION_NAME=3.0b-${COMMIT_HASH}" >> $GITHUB_ENV [cite: 38]
 
     - name: Build Standard
       run: |
@@ -61,7 +61,7 @@ jobs:
         cpu_family = 'x86_64'
         cpu = 'x86_64'
         endian = 'little'
-        EOF [cite: 70, 71]
+        EOF [cite: 39-40]
 
         cat <<EOF > cross-x86.txt
         [binaries]
@@ -78,24 +78,23 @@ jobs:
         cpu_family = 'x86'
         cpu = 'i686'
         endian = 'little'
-        [cite_start]EOF [cite: 72, 73]
+        [cite_start]EOF [cite: 41-42]
 
         cd src
         meson setup build-x64 --cross-file ../cross-x64.txt -Dbuildtype=release -Dstrip=true
         ninja -C build-x64
         meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
-        [cite_start]ninja -C build-x86 [cite: 73]
+        [cite_start]ninja -C build-x86 [cite: 42]
 
     - name: Package Standard
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
-        
         find src/build-x64 -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
         find src/build-x64 -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
         find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
-        [cite_start]find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \; [cite: 74, 75, 76]
+        find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \; [cite: 43-45]
         
         cat <<EOF > final_package/profile.json
         {
@@ -110,20 +109,20 @@ jobs:
             {"source": "syswow64/d3d12core.dll", "target": "\${syswow64}/d3d12core.dll"}
           ]
         }
-        [cite_start]EOF [cite: 77, 78]
+        [cite_start]EOF [cite: 46-47]
         
         cd final_package
-        [cite_start]tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp * [cite: 79]
+        [cite_start]tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp * [cite: 48]
 
     - name: Upload Standard Artifact
       uses: actions/upload-artifact@v4
       with:
         name: vkd3d-standard
-        [cite_start]path: '*.wcp' [cite: 79]
+        [cite_start]path: '*.wcp' [cite: 48]
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Reproduced from Arihany Blueprint)
+  # JOB 2: ARM64EC BUILD (Arihany Blueprint Repro)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -135,49 +134,30 @@ jobs:
           ca-certificates curl xz-utils jq git glslang-tools \
           build-essential python3 python3-venv python3-pip \
           pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
-          llvm crossbuild-essential-arm64 [cite: 109]
+          llvm crossbuild-essential-arm64 [cite: 18]
 
-    - name: Setup Arihany Toolchain (LLVM 20251216 + Meson 1.2.3)
+    - name: Setup Arihany Build Env (Meson 1.2.3 + LLVM 20251216)
       run: |
         python3 -m venv .venv
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
         echo "$PWD/.venv/bin" >> $GITHUB_PATH
-
-        LLVM_MINGW_TAG="20251216"
-        TOOLCHAIN_DIR="/opt/llvm-mingw"
-        wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-        sudo rm -rf "$TOOLCHAIN_DIR" && sudo mkdir -p "$TOOLCHAIN_DIR"
-        sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
-
-    - name: Install SPIRV-Headers (Arihany Fix)
-      run: |
-        SPV_TMP="$(mktemp -d)"
-        git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-        for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
-          if [ -d "/opt/llvm-mingw/$trip/include" ]; then
-            sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
-            sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
-          fi
-        done
+        
+        LLVM_TAG="20251216"
+        TOOLCHAIN="/opt/llvm-mingw"
+        wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
+        sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN"
+        sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
+        echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
     - name: Checkout VKD3D
       uses: actions/checkout@v4
       with:
         repository: HansKristian-Work/vkd3d-proton
         submodules: recursive
-        fetch-depth: 0
-        [cite_start]path: src [cite: 111]
+        [cite_start]path: src [cite: 20]
 
-    - name: Generate Version Name
+    - name: Build & Stage (Arihany Guts Logic)
       run: |
-        cd src
-        COMMIT_HASH=$(git rev-parse --short HEAD)
-        echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV [cite: 112]
-
-    - name: Build & Stage (Arihany Blueprint Logic)
-      run: |
-        # Fixed cross-file to include explicit WIDL path and Arihany CPU family
         cat <<EOF > arm64ec.ini
         [binaries]
         c = 'arm64ec-w64-mingw32-clang'
@@ -191,7 +171,7 @@ jobs:
         cpu_family = 'aarch64'
         cpu = 'aarch64'
         endian = 'little'
-        EOF 
+        EOF
 
         cat <<EOF > x86.ini
         [binaries]
@@ -206,30 +186,29 @@ jobs:
         cpu_family = 'x86'
         cpu = 'i686'
         endian = 'little'
-        [cite_start]EOF [cite: 115]
+        EOF
 
         cd src
-        # Arihany Flags: Disable strip and LTO for hybrid binary compatibility
+        # Strip Fix: Disable auto-strip and LTO
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
         ninja -C build_ec install
         
         meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
         ninja -C build_x86 install
 
-    - name: Package ARM64EC (Arihany Staging + Strip Fix)
+    - name: Package ARM64EC (Staging + Strip Fix)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
         
-        # Copy from Arihany staging prefix
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
         # Arihany Strip Fix: Manual llvm-strip --strip-unneeded
-        [cite_start]/opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll [cite: 58]
+        /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
 
-        # Dynamic JSON Generation logic
-        echo '{"type": "VKD3D","versionName": "${{ env.VERSION_NAME }}","versionCode": 0,"description": "vkd3d-proton (ARM Native + Arihany Fixes)","files": []}' > final_package/profile.json
+        # Dynamic JSON Generation
+        echo '{"type": "VKD3D","versionName": "3.0b-ARM64EC","versionCode": 0,"description": "Arihany Repro","files": []}' > final_package/profile.json
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL=${f#final_package/}
@@ -237,13 +216,12 @@ jobs:
             jq --arg s "$REL" --arg t "\${$DIR}/$(basename "$f")" '.files += [{"source": $s, "target": $t}]' final_package/profile.json > tmp.json && mv tmp.json final_package/profile.json
         done
 
-        # Arihany Tar Logic: GNU format and owner reset
         chmod -R 777 final_package
         cd final_package
-        tar --format=gnu --owner=0 --group=0 -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
+        tar --format=gnu --owner=0 --group=0 -cJf ../VKD3D-Proton-ARM64EC-Repro.wcp *
 
     - name: Upload ARM64EC Artifact
       uses: actions/upload-artifact@v4
       with:
         name: vkd3d-arm64ec
-        path: 'VKD3D-Proton-*.wcp'
+        path: '*.wcp'
