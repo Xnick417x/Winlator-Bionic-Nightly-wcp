@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Final Fix)
+name: Build FEXCore Nightly (Arihany Exact Replica)
 
 on:
   workflow_dispatch:
@@ -11,6 +11,7 @@ jobs:
 
     steps:
     - name: Install Dependencies
+      # Sourced from: install-deps-ubuntu.sh
       run: |
         sudo apt-get update -y
         sudo apt-get install -y --no-install-recommends \
@@ -19,22 +20,20 @@ jobs:
           pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
           llvm crossbuild-essential-arm64
 
-    - name: Setup Toolchain (Exact Arihany Method)
+    - name: Setup Toolchain
+      # Sourced from: setup-llvm.sh
       run: |
-        # 1. Use the EXACT version/tag from setup-llvm.sh
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         
-        # 2. Download the 'ucrt-ubuntu-22.04' version.
-        # This version contains the REAL arm64ec wrappers. We must NOT overwrite them.
+        # Download the exact version she uses
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
         
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
         
-        # 3. Add to PATH.
-        # We DO NOT create manual symlinks. We trust the toolchain's own wrappers.
+        # Add to PATH (This allows CMake to find the compilers automatically)
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
     - name: Checkout FEX
@@ -49,76 +48,73 @@ jobs:
       run: |
         git config --global --add safe.directory '*'
         git fetch --tags --force
-        
-        # Get Main Version (e.g., FEX-2601)
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
-        
-        # Get Commit Hash
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
         # Format: FEX-[Tag]-Nightly-[Commit]
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
-        echo "Detected Version: $VERSION_NAME"
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Build FEXCore (Dual Pass)
+    - name: Build FEXCore
+      # Sourced from: x86-fexcore.yml
       run: |
         build_arch() {
           local triple="$1"
+          local dest="$2"
           local build_dir="build-${triple}"
           
           echo "::group::Building $triple"
           
-          # We use Arihany's exact flags.
-          # We rely on the toolchain file finding the compiler automatically in PATH.
+          # Exact flags from her yaml. NO -static. NO winnt patch.
           cmake -B "$build_dir" -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-            -DMINGW_TRIPLE="${triple}-w64-mingw32" \
-            -DCMAKE_INSTALL_PREFIX=/usr \
             -DCMAKE_INSTALL_LIBDIR=/usr/lib/wine/aarch64-windows \
             -DENABLE_JEMALLOC_GLIBC_ALLOC=False \
             -DENABLE_LTO=False \
             -DENABLE_ASSERTIONS=False \
-            -DBUILD_TESTING=False
+            -DMINGW_TRIPLE="${triple}-w64-mingw32" \
+            -DBUILD_TESTING=False \
+            -DCMAKE_INSTALL_PREFIX=/usr
 
-          cmake --build "$build_dir"
+          ninja -C "$build_dir"
+          
+          # Install to temporary destination to collect files
+          DESTDIR="$(pwd)/$dest" ninja -C "$build_dir" install
           echo "::endgroup::"
         }
 
-        # 1. Build Host (ARM64EC)
-        build_arch "arm64ec"
-        
-        # 2. Build Bridge (AArch64)
-        build_arch "aarch64"
+        # Build both passes
+        build_arch "arm64ec" "stage-ec"
+        build_arch "aarch64" "stage-wo"
 
-    - name: Package & Strip
+    - name: Package
       run: |
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # Find the DLLs
-        DLL_EC=$(find build-arm64ec -name "libFEXCore.dll" | head -n 1)
-        DLL_WOW=$(find build-aarch64 -name "libFEXCore.dll" | head -n 1)
+        # Collect DLLs from the stage folders (Matches her logic)
+        find stage-ec -type f -name '*.dll' -exec cp {} final_package/system32/ \;
+        find stage-wo -type f -name '*.dll' -exec cp {} final_package/system32/ \;
+        
+        # Rename them to the specific names Winlator expects
+        # (FEX install usually names them libFEXCore.dll, we need to distinguish them)
+        mv final_package/system32/libFEXCore.dll final_package/system32/libarm64ecfex.dll 2>/dev/null || true
+        # Note: The second copy might overwrite the first if not careful, but since they are different builds,
+        # we need to be precise. 
+        
+        # Let's grab them directly from build dirs to be 100% safe
+        cp build-arm64ec/src/Core/libFEXCore.dll final_package/system32/libarm64ecfex.dll
+        cp build-aarch64/src/Core/libFEXCore.dll final_package/system32/libwow64fex.dll
 
-        if [ -f "$DLL_EC" ] && [ -f "$DLL_WOW" ]; then
-            echo "Found EC: $DLL_EC"
-            echo "Found WOW: $DLL_WOW"
-            
-            # Copy and Rename for Winlator
-            cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
-            cp "$DLL_WOW" final_package/system32/libwow64fex.dll
-            
-            # Use the toolchain's strip tool (Safe for this toolchain)
-            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
-            /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
-        else
-            echo "::error::Build incomplete! Missing DLLs."
+        # Check if they exist
+        if [ ! -f "final_package/system32/libarm64ecfex.dll" ]; then
+            echo "::error::Missing libarm64ecfex.dll"
             exit 1
         fi
-
+        
         # Generate Profile JSON
         cat <<EOF > final_package/profile.json
         {
