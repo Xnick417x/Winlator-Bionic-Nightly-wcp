@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Restored: Arihany Flags + Dynamic JSON)
+name: Build VKD3D-Proton (Standard + ARM64EC Fix)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (Untouched - Working)
+  # JOB 1: STANDARD BUILD (Restored to Working State)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -113,7 +113,8 @@ jobs:
         EOF
         
         cd final_package
-        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
+        chmod -R 777 .
+        tar --owner=0 --group=0 -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
     - name: Upload Standard Artifact
       uses: actions/upload-artifact@v4
@@ -123,7 +124,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Restored: Arihany Flags + Dynamic JSON)
+  # JOB 2: ARM64EC BUILD (Arihany Flags + Dynamic JSON)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -137,7 +138,7 @@ jobs:
           meson ninja-build zstd
 
     - name: Setup Toolchain
-      # MUST use 20251104 to get the ARM64EC compiler
+      # Using 20251104 to ensure arm64ec compiler exists
       run: |
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -199,8 +200,8 @@ jobs:
 
         cd src
         
-        # === ARIHANY FLAGS (LTO/Strip OFF) ===
-        # This keeps the headers valid so Winlator accepts the DLLs
+        # === ARIHANY FIX: Disable LTO and Strip ===
+        # This keeps the binaries valid for Winlator
         echo "::group::Building ARM64EC"
         meson setup build-ec \
           --cross-file ../cross-arm64ec.txt \
@@ -225,25 +226,22 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
-        # 1. FIND AND COPY (The Reliable Way)
-        # Using wildcards to ensure we get d3d12.dll AND d3d12core.dll
+        # 1. WORKING FILE FINDER (Using 'find' instead of 'cp')
         find src/build-ec -name "*.dll" -exec cp -L {} final_package/system32/ \;
         find src/build-x86 -name "*.dll" -exec cp -L {} final_package/syswow64/ \;
         
-        # Check if files exist (Fail fast if build failed)
+        # Verify files exist
         if [ -z "$(ls -A final_package/system32)" ]; then
-           echo "::error::System32 is empty! ARM build failed to produce DLLs."
+           echo "::error::System32 is empty! Build failed."
            exit 1
         fi
 
         # 2. ARIHANY STRIP FIX (Manual)
-        # We disabled the bad strip earlier. Now we do the safe strip.
+        # We strip manually to reduce size without breaking headers
         echo "Stripping ARM64EC binaries..."
         /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
 
-        # 3. DYNAMIC JSON GENERATION
-        # This scans the final folders and writes the JSON to match EXACTLY.
-        # This prevents the "Revert to None" issue caused by missing file mismatches.
+        # 3. DYNAMIC JSON (Guarantees JSON matches Files)
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -261,13 +259,14 @@ jobs:
             FOLDER=$(dirname "$REL_PATH")
             BASE_NAME=$(basename "$f")
             
-            # Add entry to JSON safely
             jq --arg src "$REL_PATH" --arg tgt "\${$FOLDER}/$BASE_NAME" \
                '.files += [{"source": $src, "target": $tgt}]' \
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # 4. FIX PERMISSIONS (Critical)
+        # 4. FIX PERMISSIONS & OWNERSHIP
+        # chmod 777 prevents "Access Denied" on Android
+        # --owner=0 prevents "User ID not found"
         chmod -R 777 final_package
         cd final_package
         tar --owner=0 --group=0 -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
