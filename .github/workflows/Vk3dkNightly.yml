@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Logic + Dynamic JSON)
+name: Build VKD3D-Proton (New Toolchain + Arihany Fixes)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (Untouched - Keeps your working build)
+  # JOB 1: STANDARD BUILD (Untouched - Working)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -22,7 +22,6 @@ jobs:
 
     - name: Setup Toolchain
       run: |
-        # Using the same toolchain setup as standard build
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -124,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (INLINED ARIHANY SCRIPTS + FIXES)
+  # JOB 2: ARM64EC BUILD (New Toolchain + Arihany Flags)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -137,13 +136,12 @@ jobs:
           build-essential python3 python3-pip pkg-config \
           meson ninja-build zstd
 
-    - name: Setup Toolchain (STABLE)
-      # Fix for "Exit Code 8": Using 20.04 UCRT release which is more stable on Actions
+    - name: Setup Toolchain (NEWER)
+      # FIX: Back to 20251104 so 'arm64ec-w64-mingw32-clang' exists
       run: |
-        LLVM_MINGW_TAG="20240606"
+        LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
-        # Download with retry and verbose output to debug download fails
-        wget -q --tries=3 "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-20.04-x86_64.tar.xz" -O llvm.tar.xz
+        wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
@@ -165,7 +163,7 @@ jobs:
 
     - name: Build ARM64EC & x86
       run: |
-        # 1. Define ARM64EC Cross File (Matches Arihany's guts-arm64ec.sh)
+        # 1. Define ARM64EC Cross File
         cat <<EOF > cross-arm64ec.txt
         [binaries]
         c = '/opt/llvm-mingw/bin/arm64ec-w64-mingw32-clang'
@@ -204,7 +202,7 @@ jobs:
         cd src
         
         # === ARIHANY LOGIC: LTO OFF, STRIP OFF ===
-        # This prevents the "Revert to None" error by keeping PE headers valid
+        # Use the NEW toolchain but disable the features that break Winlator
         echo "::group::Building ARM64EC"
         meson setup build-ec \
           --cross-file ../cross-arm64ec.txt \
@@ -212,6 +210,9 @@ jobs:
           -Dstrip=false \
           -Db_lto=false
         ninja -C build-ec
+        
+        # Grab the files cleanly
+        meson install -C build-ec --destdir ../staging-ec
         echo "::endgroup::"
         
         echo "::group::Building x86"
@@ -221,6 +222,7 @@ jobs:
           -Dstrip=true \
           -Db_lto=true
         ninja -C build-x86
+        meson install -C build-x86 --destdir ../staging-x86
         echo "::endgroup::"
 
     - name: Package with Dynamic JSON
@@ -229,13 +231,12 @@ jobs:
         mkdir -p final_package/system32
         mkdir -p final_package/syswow64
         
-        # 1. Grab everything (dlls) using wildcards
-        # We copy from the build folder directly
-        find src/build-ec -name "*.dll" -exec cp -L {} final_package/system32/ \;
-        find src/build-x86 -name "*.dll" -exec cp -L {} final_package/syswow64/ \;
+        # 1. MOVE FILES (From staging)
+        cp -L staging-ec/usr/local/bin/*.dll final_package/system32/
+        cp -L staging-x86/usr/local/bin/*.dll final_package/syswow64/
 
-        # 2. MANUAL STRIP (The "Arihany Strip Fix")
-        # We use llvm-strip --strip-unneeded. Standard strip corrupts the file.
+        # 2. MANUAL STRIP (Arihany Fix)
+        # Safe strip that keeps headers valid for Winlator
         echo "Stripping ARM64EC binaries..."
         /opt/llvm-mingw/bin/llvm-strip --strip-unneeded final_package/system32/*.dll
 
@@ -262,8 +263,7 @@ jobs:
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # 4. FIX PERMISSIONS & PACKAGE
-        # Important: chmod 777 prevents Android "Access Denied" errors
+        # 4. FIX PERMISSIONS
         chmod -R 777 final_package
         cd final_package
         tar --owner=0 --group=0 -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
