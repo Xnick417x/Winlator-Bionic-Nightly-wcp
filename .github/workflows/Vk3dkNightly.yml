@@ -8,7 +8,7 @@ on:
 jobs:
   # ==================================================================
   # JOB 1: STANDARD BUILD (x64 + x86)
-  # Name: 3.0b-[CommitHash]
+  # Fix: Uses clean tar command to prevent "./" path errors
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # FIX: Removed "-Standard". Now it's just "3.0b-[Hash]"
+        # Matches your working screenshot style
         echo "VERSION_NAME=3.0b-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build Standard
@@ -101,7 +101,7 @@ jobs:
         find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
         
-        # FIX: Matches your working JSON exactly.
+        # Matches your working JSON exactly.
         cat <<EOF > final_package/profile.json
         {
           "type": "VKD3D",
@@ -117,9 +117,10 @@ jobs:
         }
         EOF
         
+        # FIX: "cd" into the directory and use "*"
+        # This prevents the "./" prefix in the tar file which causes the "Revert to None" bug.
         cd final_package
-        # FIX: Explicitly list folders to avoid ./ prefix in tar which confuses Winlator
-        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp system32 syswow64 profile.json
+        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
     - name: Upload Standard Artifact
       uses: actions/upload-artifact@v4
@@ -130,7 +131,7 @@ jobs:
 
   # ==================================================================
   # JOB 2: ARM64EC BUILD (Native/Hybrid)
-  # Name: 3.0b-ARM64EC-[CommitHash]
+  # Fix: Clean tar command to fix the Revert Bug
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -165,8 +166,8 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        # Keeps ARM64EC label to distinguish it
-        echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
+        # Shortened name to prevent potential string parsing issues
+        echo "VERSION_NAME=3.0b-EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build ARM64EC
       run: |
@@ -221,7 +222,7 @@ jobs:
         find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
         find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
         
-        # FIX: Exact JSON replica.
+        # Exact JSON replica.
         cat <<EOF > final_package/profile.json
         {
           "type": "VKD3D",
@@ -237,9 +238,9 @@ jobs:
         }
         EOF
         
+        # FIX: Clean tar command.
         cd final_package
-        # FIX: Clean tar without ./ paths
-        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp system32 syswow64 profile.json
+        tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
 
     - name: Upload ARM64EC Artifact
       uses: actions/upload-artifact@v4
