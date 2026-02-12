@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly (Arihany Final)
+name: Build FEXCore Nightly (Final Fix)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Install Dependencies (From install-deps-ubuntu.sh)
+    - name: Install Dependencies
       run: |
         sudo apt-get update -y
         sudo apt-get install -y --no-install-recommends \
@@ -19,28 +19,21 @@ jobs:
           pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
           llvm crossbuild-essential-arm64
 
-    - name: Setup Toolchain (From setup-llvm.sh)
+    - name: Setup Toolchain (Exact Arihany Version)
       run: |
-        # 1. Use the EXACT version from your setup-llvm.sh
+        # 1. Use the version from setup-llvm.sh
         LLVM_MINGW_TAG="20251104"
         TOOLCHAIN_DIR="/opt/llvm-mingw"
         
-        # 2. Download to the specific /opt directory
+        # 2. Download the 'ucrt-ubuntu-22.04' version (Contains the correct arm64ec wrappers)
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
         
         sudo rm -rf "$TOOLCHAIN_DIR"
         sudo mkdir -p "$TOOLCHAIN_DIR"
         sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
         
-        # 3. Add to PATH
+        # 3. Add to PATH so CMake finds 'arm64ec-w64-mingw32-clang' automatically
         echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
-        
-        # 4. Create the 'arm64ec' symlinks (Crucial for FEX toolchain detection)
-        sudo ln -sf "$TOOLCHAIN_DIR/bin/clang" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang"
-        sudo ln -sf "$TOOLCHAIN_DIR/bin/clang++" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-clang++"
-        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-ar" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-ar"
-        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-windres" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-windres"
-        sudo ln -sf "$TOOLCHAIN_DIR/bin/llvm-strip" "$TOOLCHAIN_DIR/bin/arm64ec-w64-mingw32-strip"
 
     - name: Checkout FEX
       uses: actions/checkout@v4
@@ -54,20 +47,14 @@ jobs:
       run: |
         git config --global --add safe.directory '*'
         git fetch --tags
-        
-        # Get the Main Version (e.g., FEX-2601)
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "FEX-Unknown")
-        
-        # Get the Commit Hash (e.g., 1387aecc)
         COMMIT_HASH=$(git rev-parse --short HEAD)
         
-        # FIX: Format matches your request: FEX-[Tag]-Nightly-[Commit]
+        # Format: FEX-[Tag]-Nightly-[Commit] (As requested)
         VERSION_NAME="${LATEST_TAG}-Nightly-${COMMIT_HASH}"
         
         echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
         echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
-
-    # REMOVED: Patch WinNT Header (Arihany's script does NOT use this, causing the crash)
 
     - name: Build FEXCore (Arihany Config)
       run: |
@@ -77,6 +64,8 @@ jobs:
           
           echo "::group::Building $triple"
           
+          # We do NOT manually define the compiler here. 
+          # We let CMake find the real wrapper in the PATH we set above.
           cmake -B "$build_dir" -G Ninja -Wno-dev \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
@@ -105,7 +94,6 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32
         
-        # Grab files from the separate build folders
         DLL_EC=$(find build-arm64ec -name "libFEXCore.dll" | head -n 1)
         DLL_WOW=$(find build-aarch64 -name "libFEXCore.dll" | head -n 1)
 
@@ -116,7 +104,7 @@ jobs:
             cp "$DLL_EC" final_package/system32/libarm64ecfex.dll
             cp "$DLL_WOW" final_package/system32/libwow64fex.dll
             
-            # Strip using the toolchain we installed
+            # Safe stripping using the official tool
             /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libarm64ecfex.dll
             /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/libwow64fex.dll
         else
@@ -124,7 +112,7 @@ jobs:
             exit 1
         fi
 
-        # Generate Profile JSON (With Fixed Version Name)
+        # Generate Profile JSON
         cat <<EOF > final_package/profile.json
         {
           "type": "FEXCore",
