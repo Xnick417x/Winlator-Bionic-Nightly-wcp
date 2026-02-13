@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Force & Deliver)
+name: Build VKD3D-Proton (Direct Linker Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARCH LINUX + STRIP + PATCH + FORCE UPLOAD)
+  # JOB 2: ARM64EC BUILD (DIRECT LINKER OVERRIDE)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,8 +146,8 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # Using Arihany's Toolchain
-          LLVM_TAG="20251216"
+          # Stable Toolchain
+          LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -161,6 +161,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
+          # Only x86/x64 (Arihany Logic)
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -175,17 +176,29 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Toolchain Strip Enabled)
+      - name: Build & Stage (Linker Override)
         run: |
+          # THE FIX: We explicitly define 'c_ld' and 'cpp_ld' to use lld-link.
+          # This bypasses the gcc wrapper and lets us use native Windows flags.
+          
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
           cpp = 'arm64ec-w64-mingw32-g++'
           ar = 'arm64ec-w64-mingw32-ar'
-          # Use Toolchain Strip explicitly
-          strip = '/opt/llvm-mingw/bin/llvm-strip'
+          strip = 'llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
+          
+          # Direct Linker Override
+          c_ld = 'lld-link'
+          cpp_ld = 'lld-link'
+          
+          [built-in options]
+          # Force Machine Type: ARM64 (0xAA64)
+          # We also ignore the warning about target mismatch (4264)
+          c_link_args = ['-machine:arm64', '-ignore:4264']
+          cpp_link_args = ['-machine:arm64', '-ignore:4264']
           
           [host_machine]
           system = 'windows'
@@ -199,7 +212,7 @@ jobs:
           c = 'i686-w64-mingw32-gcc'
           cpp = 'i686-w64-mingw32-g++'
           ar = 'llvm-ar'
-          strip = '/opt/llvm-mingw/bin/llvm-strip'
+          strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
           widl = 'i686-w64-mingw32-widl'
           [host_machine]
@@ -210,80 +223,36 @@ jobs:
           EOF
 
           cd src
-          # ENABLE STRIP: We want the final small binary before we patch it
           meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true
           ninja -C build_ec install
           
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
           ninja -C build_x86 install
 
-      - name: SURGICAL HEX PATCH (0xAA64)
-        run: |
-          echo "==================================================="
-          echo " PATCHING STRIPPED BINARIES TO 0xAA64"
-          echo "==================================================="
-          
-          rm -rf final_package
-          mkdir -p final_package/system32 final_package/syswow64
-          cp -L src/stage/ec/bin/*.dll final_package/system32/
-          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
-          
-          chmod -R 777 final_package
-
-          cat <<EOF > patch.py
-          import sys
-          import glob
-          import struct
-
-          # 0xAA64 (AArch64) in Little Endian
-          TARGET_MACHINE = b'\x64\xaa' 
-
-          files = glob.glob("final_package/system32/*.dll")
-          
-          for file_path in files:
-              print(f"Patching {file_path}...")
-              try:
-                  with open(file_path, "r+b") as f:
-                      f.seek(0x3C)
-                      pe_offset = struct.unpack("<I", f.read(4))[0]
-                      machine_offset = pe_offset + 4
-                      
-                      f.seek(machine_offset)
-                      old = f.read(2)
-                      print(f"  -> Old: {old.hex()}")
-                      
-                      f.seek(machine_offset)
-                      f.write(TARGET_MACHINE)
-                      print(f"  -> New: {TARGET_MACHINE.hex()}")
-                      
-              except Exception as e:
-                  print(f"ERROR: {e}")
-                  sys.exit(1)
-          EOF
-          
-          python patch.py
-
-      - name: Verify Architecture (NON-BLOCKING)
+      - name: Verify Architecture
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          # We run readobj to see what it thinks, but we use '|| true' 
-          # to ensure the build continues even if it complains about 0xA64E
-          
-          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
-          echo "REPORTED HEADER: $MACHINE_TYPE"
+          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
+          echo "FOUND: $MACHINE_TYPE"
           
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
-             echo "SUCCESS: Tool confirmed AARCH64."
+             echo "SUCCESS: Binary matches AARCH64 (0xAA64)."
           else
-             echo "WARNING: Tool reports mismatch (likely Hybrid/ARM64X)."
-             echo "PROCEEDING ANYWAY -> Winlator likely accepts this file."
+             echo "::error::FAILURE: Header is still wrong: $MACHINE_TYPE"
+             exit 1
           fi
           echo "=========================================="
 
       - name: Package Final
         run: |
+          rm -rf final_package
+          mkdir -p final_package/system32 final_package/syswow64
+          
+          cp -L src/stage/ec/bin/*.dll final_package/system32/
+          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
+
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
@@ -312,5 +281,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-force-deliver
+          name: vkd3d-direct-linker
           path: '*.wcp'
