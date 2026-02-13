@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
+name: Build VKD3D-Proton (Job 1 Locked + Job 2 FEX Logic)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Arihany Toolchain + ZSTD + Exact Strip)
+  # JOB 2: ARM64EC BUILD (Arihany Environment + FEX Flags)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -143,7 +143,6 @@ jobs:
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
         echo "$PWD/.venv/bin" >> $GITHUB_PATH
         
-        # Toolchain 20251216 (Arihany's exact version)
         LLVM_TAG="20251216"
         TOOLCHAIN="/opt/llvm-mingw"
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -175,10 +174,10 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Build & Stage (Arihany Logic)
+    - name: Build & Stage
       run: |
-        # Exact settings from arm64ec.meson.ini.txt
-        # 'gcc' alias and 'aarch64' cpu_family are critical
+        # Exact settings from your arm64ec.meson.ini.txt
+        # THE SPOOF: cpu_family='aarch64' + arm64ec-gcc compiler
         cat <<EOF > arm64ec.ini
         [binaries]
         c = 'arm64ec-w64-mingw32-gcc'
@@ -210,14 +209,15 @@ jobs:
         EOF
 
         cd src
-        # Disable build-time strip, we do it manually later
+        # THE FEX FLAGS: Disable LTO (-Db_lto=false)
+        # Disable auto-strip so we can do it manually later
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
         ninja -C build_ec install
         
         meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
         ninja -C build_x86 install
 
-    - name: Package ARM64EC (Arihany Packing Logic)
+    - name: Package ARM64EC (ZSTD Compressed + Strip All)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
@@ -226,7 +226,7 @@ jobs:
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-        # Manual Strip: Exact method from packing.sh (Line 79)
+        # [cite_start]THE FEX STRIP: Use --strip-all (matches FEX script line 11) [cite: 11]
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
@@ -242,6 +242,7 @@ jobs:
             files: []
           }' > final_package/profile.json
 
+        # Populate JSON
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL_PATH=${f#final_package/}
@@ -254,8 +255,7 @@ jobs:
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # PACKING FIX: Use ZSTD (--zstd) like Arihany's packing.sh
-        # Also includes numeric-owner to prevent permission issues
+        # THE ARIHANY PACKAGING: ZSTD + Numeric Owner
         chmod -R 777 final_package
         cd final_package
         tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
