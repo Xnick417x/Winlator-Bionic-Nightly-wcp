@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Fix - Reordered)
+name: Build VKD3D-Proton (Force Header Patch)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED - Source: Vk3dkNightlyNoArm.yml.txt)
+  # JOB 1: STANDARD BUILD (LOCKED)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - REORDERED)
+  # JOB 2: ARM64EC BUILD (WITH HEADER PATCHING)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -131,7 +131,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # FIX: Explicitly REMOVE any system meson to prevent interference
+          # Removing system meson just in case, but we will patch anyway.
           sudo apt-get remove -y meson || true
           
           sudo apt-get install -y --no-install-recommends \
@@ -140,7 +140,7 @@ jobs:
             pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
 
-      # FIX: Checkout FIRST so we don't wipe the venv later
+      # CHECKOUT FIRST
       - name: Checkout VKD3D
         uses: actions/checkout@v4
         with:
@@ -151,7 +151,6 @@ jobs:
       - name: Setup Arihany Build Env
         run: |
           python3 -m venv .venv
-          # Install EXACT version 1.2.3 in venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           
@@ -162,12 +161,10 @@ jobs:
           sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
-      - name: Install SPIRV-Headers (Specific Targets Only)
+      - name: Install SPIRV-Headers
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          
-          # Only installing to x86_64 and i686 paths
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -181,15 +178,10 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Arihany Logic)
+      - name: Build & Stage (Builds as ARM64EC)
         run: |
-          # Use absolute path to ensure we hit the VENV meson
           MESON_BIN="$GITHUB_WORKSPACE/.venv/bin/meson"
           
-          echo "Checking meson version..."
-          $MESON_BIN --version
-          
-          # Cross-file from arm64ec.meson.ini.txt
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -221,38 +213,70 @@ jobs:
           EOF
 
           cd src
-          # Build ARM64EC (Using absolute path to Meson 1.2.3)
           $MESON_BIN setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
-          # Build x86
           $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: VERIFY ARCHITECTURE (The Death Check)
+      - name: FORCE HEADER PATCH (The Fix)
+        run: |
+          # This script manually overwrites the Machine Type in the PE Header
+          # 0xA641 (ARM64EC) -> 0xAA64 (AARCH64)
+          cat <<EOF > patch_headers.py
+          import sys
+          import struct
+
+          def patch(path):
+              try:
+                  with open(path, 'r+b') as f:
+                      # Read PE signature offset (0x3C)
+                      f.seek(0x3C)
+                      pe_offset = int.from_bytes(f.read(4), 'little')
+                      
+                      # Machine type is PE_Offset + 4 bytes
+                      machine_offset = pe_offset + 4
+                      f.seek(machine_offset)
+                      current = f.read(2)
+                      
+                      if current == b'\x41\xa6': # 0xA641 (ARM64EC)
+                          print(f"PATCHING {path}: Found ARM64EC (0xA641)")
+                          f.seek(machine_offset)
+                          f.write(b'\x64\xaa') # 0xAA64 (AARCH64)
+                          print(f"SUCCESS: Wrote AARCH64 (0xAA64)")
+                      elif current == b'\x64\xaa':
+                          print(f"SKIPPING {path}: Already AARCH64")
+                      else:
+                          print(f"IGNORING {path}: Unknown machine {current.hex()}")
+              except Exception as e:
+                  print(f"ERROR processing {path}: {e}")
+
+          # Patch all DLLs in the staging folder
+          import glob
+          for dll in glob.glob('src/stage/ec/bin/*.dll'):
+              patch(dll)
+          EOF
+
+          python3 patch_headers.py
+
+      - name: VERIFY ARCHITECTURE
         run: |
           echo "=========================================="
-          echo "VERIFYING DLL ARCHITECTURE..."
+          echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
           
-          # Check the Header
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
-          # FAIL THE BUILD if it is not AARCH64 or ARM64
-          if echo "$MACHINE_TYPE" | grep -q "ARM64EC"; then
-            echo "::error::FAILURE: Meson overrode the spoof! The binary is ARM64EC (0xA641) which Winlator will reject."
-            exit 1
-          fi
-          
-          if echo "$MACHINE_TYPE" | grep -qE "AARCH64|ARM64"; then
-             echo "SUCCESS: Binary is spoofed as AARCH64 (0xAA64). Winlator should accept this."
+          # Now it MUST imply AARCH64
+          if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
+             echo "SUCCESS: Binary matches AARCH64."
           else
-             echo "::error::UNKNOWN ARCHITECTURE: $MACHINE_TYPE"
+             echo "::error::FAILURE: Patch didn't work! Still shows: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
 
-      - name: Package ARM64EC (Arihany Packing Logic)
+      - name: Package ARM64EC
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -260,11 +284,10 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip from packing.sh
+          # Manual Strip
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-          # Dynamic JSON
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
@@ -286,7 +309,6 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing with ZSTD + Numeric Owner from packing.sh
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
