@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Final Arihany Exact)
+name: Build VKD3D-Proton (Arihany Exact Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (REPLICATING ARIHANY'S EXACT SCRIPTS)
+  # JOB 2: ARM64EC BUILD (REPLICATING ARIHANY EXACTLY)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -152,7 +152,7 @@ jobs:
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
       - name: Install SPIRV-Headers (Specific Targets Only)
-        # Logic from: setup-llvm-meson.sh (Lines 26-36)
+        # Logic from: setup-llvm-meson.sh
         # CRITICAL: She only installs headers for x86_64 and i686, NOT arm64ec.
         run: |
           SPV_TMP="$(mktemp -d)"
@@ -181,7 +181,7 @@ jobs:
       - name: Build & Stage (Arihany Logic)
         run: |
           # Logic from: arm64ec.meson.ini.txt
-          # CRITICAL: Using 'gcc' aliases and spoofing 'aarch64' cpu_family
+          # CRITICAL FIX: widl is on the same line. 'gcc' aliases used. cpu_family='aarch64' spoofed.
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -197,7 +197,6 @@ jobs:
           endian = 'little'
           EOF
 
-          # Standard x86 cross-file
           cat <<EOF > x86.ini
           [binaries]
           c = 'i686-w64-mingw32-gcc'
@@ -215,14 +214,10 @@ jobs:
 
           cd src
           # Logic from: guts-arm64ec.sh
-          # Note: We do NOT disable LTO because Arihany's guts script does not.
-          # We disable 'strip' here to handle it manually in the packing step.
-          
-          # Build ARM64EC
+          # Strip disabled here to handle it manually in packaging step.
           meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
-          # Build x86 (32-bit)
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
@@ -231,11 +226,11 @@ jobs:
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
           
-          # Logic from: packing.sh & guts-arm64ec.sh
+          # Logic from: guts-arm64ec.sh
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip (Matches packing.sh line 79)
+          # Logic from: packing.sh - Manual strip
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
@@ -256,7 +251,6 @@ jobs:
               REL_PATH=${f#final_package/}
               FOLDER=$(dirname "$REL_PATH")
               
-              # Target mapping from vkd3d-proton-arm64ec.sh
               if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
               
               jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
@@ -264,8 +258,7 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing: ZSTD + Numeric Owner (Matches packing.sh line 107)
-          # CRITICAL: --numeric-owner prevents permission issues on Android
+          # Logic from: packing.sh - ZSTD + Numeric Owner (Matches Arihany Exact)
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
