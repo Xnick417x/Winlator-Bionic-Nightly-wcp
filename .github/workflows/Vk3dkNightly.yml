@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Strict - No System Meson)
+name: Build VKD3D-Proton (Arihany Exact - Meson 1.2.3 Pinned)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-pip pkg-config \
-            meson ninja-build zstd
+            zstd
+          # NOTE: 'meson' and 'ninja-build' REMOVED to avoid conflict
 
       - name: Setup Toolchain
         run: |
@@ -29,6 +30,9 @@ jobs:
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
+
+      - name: Install Build Tools (Standard - Pinned for Consistency)
+        run: pip3 install "meson==1.2.3" "ninja==1.11.1"
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -123,7 +127,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - VERSION ENFORCED)
+  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - MESON 1.2.3 PINNED)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -131,7 +135,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # FIX: 'meson' REMOVED. Only 'ninja-build' is kept (matches install-deps-ubuntu.sh).
+          # STRICT FIX: 'meson' REMOVED from this list. 'ninja-build' is kept.
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
@@ -141,7 +145,8 @@ jobs:
       - name: Setup Arihany Build Env
         run: |
           python3 -m venv .venv
-          # Install EXACT version 1.2.3. This version respects the spoof.
+          # FIX: Install EXACT version 1.2.3.
+          # This version is required for the spoof to work.
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           
@@ -157,7 +162,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Only installing to x86_64 and i686 paths, matching setup-llvm-meson.sh
+          # Only installing to x86_64 and i686 paths
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -180,12 +185,11 @@ jobs:
 
       - name: Build & Stage (Arihany Logic)
         run: |
-          # Debug: Verify we are using the OLD meson 1.2.3
+          # Debug: Verify we are using Meson 1.2.3
           which meson
           meson --version
           
-          # Cross-file from arm64ec.meson.ini.txt
-          # Using 'gcc' wrapper and spoofing 'aarch64' machine
+          # Cross-file
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -225,16 +229,15 @@ jobs:
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: DEBUG - Verify PE Header (Check Logs)
+      - name: Verify Architecture (Debug Step)
         run: |
-          echo "=========================================="
-          echo "VERIFYING DLL ARCHITECTURE FOR WINLATOR..."
+          echo "Checking PE Header for ARM64EC binary..."
+          # If this says 'ARM64EC' instead of 'ARM64' or 'AARCH64', the spoof failed.
           if [ -f src/stage/ec/bin/d3d12.dll ]; then
-            /opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep -E "Machine:|ImageOptionalHeader"
+            /opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep -E "Machine:|ImageOptionalHeader" || true
           else
-            echo "DLL not found!"
+            echo "DLL not found, cannot verify."
           fi
-          echo "=========================================="
 
       - name: Package ARM64EC (Arihany Packing Logic)
         run: |
@@ -244,7 +247,7 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip from packing.sh
+          # Manual Strip
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
@@ -270,7 +273,7 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing with ZSTD + Numeric Owner from packing.sh
+          # Packing with ZSTD + Numeric Owner
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
