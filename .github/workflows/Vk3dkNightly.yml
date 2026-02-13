@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Docker Container Fix)
+name: Build VKD3D-Proton (Docker Ubuntu 22.04)
 
 on:
   workflow_dispatch:
@@ -123,16 +123,21 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (DOCKER CONTAINER ISOLATION)
+  # JOB 2: ARM64EC BUILD (INSIDE UBUNTU 22.04 CONTAINER)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
     container:
-      image: archlinux:latest  # Using Arch Linux to match enthusiast setups
+      image: ubuntu:22.04  # Matches the era of Arihany's environment
     steps:
-      - name: Install Dependencies (Arch Linux)
+      - name: Install Dependencies (Ubuntu 22.04)
         run: |
-          pacman -Sy --noconfirm git base-devel glslang python python-pip cmake ninja jq wget tar zstd
+          apt-get update -y
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl xz-utils jq git \
+            build-essential python3 python3-venv python3-pip \
+            pkg-config cmake ninja-build zstd dos2unix \
+            tar unzip wget
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -143,8 +148,8 @@ jobs:
 
       - name: Setup Arihany Build Env
         run: |
-          # Create python venv for Meson
-          python -m venv .venv
+          # Create python venv
+          python3 -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1" pefile
           
           # Install Toolchain
@@ -154,7 +159,7 @@ jobs:
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
           tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
           
-          # Add to PATH for this step and future steps
+          # Add to PATH
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
@@ -172,7 +177,6 @@ jobs:
       - name: Generate Version Name
         run: |
           cd src
-          # Safe git config for container
           git config --global --add safe.directory '*'
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
@@ -229,7 +233,7 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-      - name: SAFE HEADER PATCH (Python inside Docker)
+      - name: SAFE HEADER PATCH (Just in case)
         run: |
           echo "==================================================="
           echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
@@ -272,8 +276,9 @@ jobs:
                   sys.exit(1)
           EOF
           
-          # Use the venv python we set up earlier
-          python patch_pe.py
+          # Using system python (inside container) + pip install from Setup step
+          # We installed pefile into .venv earlier, so invoke that python
+          .venv/bin/python patch_pe.py
 
       - name: Verify Architecture (Final Check)
         run: |
