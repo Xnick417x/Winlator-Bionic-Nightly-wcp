@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
+name: Build VKD3D-Proton (Dual: Standard + Arihany Exact)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED - Source: Vk3dkNightlyNoArm.yml.txt)
+  # JOB 1: STANDARD BUILD (LOCKED - Working Version)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Arihany Exact Environment + Spoof)
+  # JOB 2: ARM64EC BUILD (ARIHANY'S EXACT METHOD)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -153,8 +153,8 @@ jobs:
         echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
     - name: Install SPIRV-Headers (Strict Match)
-      # Matches setup-llvm-meson.sh (Only copies to x86_64/i686)
-      # This confirms arm64ec compiler is reading from x86 paths
+      # Matches setup-llvm-meson.sh logic (only copies to x86_64 and i686)
+      # This confirms arm64ec compiler is configured to read from x86 paths
       run: |
         SPV_TMP="$(mktemp -d)"
         git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
@@ -176,12 +176,13 @@ jobs:
       run: |
         cd src
         COMMIT_HASH=$(git rev-parse --short HEAD)
+        # Your preferred naming
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
     - name: Build & Stage (Arihany Logic)
       run: |
         # CROSS-FILE: Exact match of arm64ec.meson.ini.txt
-        # USES 'gcc' aliases (IMPORTANT) and SPOOFS 'aarch64' (CRITICAL)
+        # Uses GCC ALIASES (Critical!) and SPOOFS 'aarch64' (Critical!)
         cat <<EOF > arm64ec.ini
         [binaries]
         c = 'arm64ec-w64-mingw32-gcc'
@@ -214,7 +215,8 @@ jobs:
 
         cd src
         # Build logic matches guts-arm64ec.sh
-        # LTO is ENABLED (Default) - Matches Arihany
+        # LTO is ENABLED (Default) because Arihany doesn't disable it.
+        # Strip disabled here so we can do it manually in the packaging step.
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
         ninja -C build_ec install
         
@@ -226,6 +228,7 @@ jobs:
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
         
+        # Copy from Staging
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
@@ -233,7 +236,7 @@ jobs:
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-        # Dynamic JSON Generation
+        # Dynamic JSON Generation with your requested Description
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -250,6 +253,7 @@ jobs:
             REL_PATH=${f#final_package/}
             FOLDER=$(dirname "$REL_PATH")
             
+            # Explicit targets
             if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
             
             jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
@@ -257,8 +261,7 @@ jobs:
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # PACKING: ZSTD + Numeric Owner (Matches Arihany exact packaging)
-        # This fixes the "orange icon" and permission issues.
+        # PACKING: ZSTD + Numeric Owner (Exact match packing.sh line 107)
         chmod -R 777 final_package
         cd final_package
         tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
