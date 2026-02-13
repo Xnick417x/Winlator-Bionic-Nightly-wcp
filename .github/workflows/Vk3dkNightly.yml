@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Force Header Patch)
+name: Build VKD3D-Proton (Force Hex Patch)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (WITH HEADER PATCHING)
+  # JOB 2: ARM64EC BUILD (WITH NUCLEAR HEADER PATCH)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -131,7 +131,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # Removing system meson just in case, but we will patch anyway.
+          # Remove system meson to be safe
           sudo apt-get remove -y meson || true
           
           sudo apt-get install -y --no-install-recommends \
@@ -140,7 +140,6 @@ jobs:
             pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
 
-      # CHECKOUT FIRST
       - name: Checkout VKD3D
         uses: actions/checkout@v4
         with:
@@ -219,59 +218,77 @@ jobs:
           $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
-      - name: FORCE HEADER PATCH (The Fix)
+      - name: NUCLEAR HEADER PATCH (FORCE OVERWRITE)
         run: |
-          # This script manually overwrites the Machine Type in the PE Header
-          # 0xA641 (ARM64EC) -> 0xAA64 (AARCH64)
-          cat <<EOF > patch_headers.py
+          echo "==================================================="
+          echo " SEARCHING FOR DLLs TO PATCH..."
+          echo "==================================================="
+          
+          # Find all DLLs in the 'ec' stage directory
+          find src/stage/ec -name "*.dll" > dll_list.txt
+          cat dll_list.txt
+          
+          cat <<EOF > force_patch.py
           import sys
-          import struct
-
-          def patch(path):
+          import os
+          
+          print("--- STARTING PYTHON PATCHER ---")
+          
+          try:
+              with open("dll_list.txt", "r") as f:
+                  files = [line.strip() for line in f if line.strip()]
+          except FileNotFoundError:
+              print("ERROR: dll_list.txt not found!")
+              sys.exit(1)
+          
+          if not files:
+              print("ERROR: No DLLs found in list!")
+              sys.exit(1)
+          
+          for file_path in files:
+              print(f"Checking: {file_path}")
               try:
-                  with open(path, 'r+b') as f:
-                      # Read PE signature offset (0x3C)
+                  with open(file_path, "r+b") as f:
                       f.seek(0x3C)
                       pe_offset = int.from_bytes(f.read(4), 'little')
-                      
-                      # Machine type is PE_Offset + 4 bytes
                       machine_offset = pe_offset + 4
+                      
                       f.seek(machine_offset)
                       current = f.read(2)
+                      print(f"  > Offset: {hex(machine_offset)} | Current Hex: {current.hex()}")
                       
-                      if current == b'\x41\xa6': # 0xA641 (ARM64EC)
-                          print(f"PATCHING {path}: Found ARM64EC (0xA641)")
+                      if current == b'\x41\xa6':
+                          print("  > DETECTED ARM64EC (0xA641). OVERWRITING...")
                           f.seek(machine_offset)
-                          f.write(b'\x64\xaa') # 0xAA64 (AARCH64)
-                          print(f"SUCCESS: Wrote AARCH64 (0xAA64)")
+                          f.write(b'\x64\xaa')
+                          print("  > SUCCESS: Wrote 0xAA64 (AARCH64)")
                       elif current == b'\x64\xaa':
-                          print(f"SKIPPING {path}: Already AARCH64")
+                          print("  > SKIP: Already AARCH64")
                       else:
-                          print(f"IGNORING {path}: Unknown machine {current.hex()}")
+                          print(f"  > UNKNOWN TYPE: {current.hex()}")
+                          
               except Exception as e:
-                  print(f"ERROR processing {path}: {e}")
-
-          # Patch all DLLs in the staging folder
-          import glob
-          for dll in glob.glob('src/stage/ec/bin/*.dll'):
-              patch(dll)
+                  print(f"  > ERROR: {e}")
+                  sys.exit(1)
+          print("--- PATCHING COMPLETE ---")
           EOF
+          
+          python3 force_patch.py
 
-          python3 patch_headers.py
-
-      - name: VERIFY ARCHITECTURE
+      - name: VERIFY ARCHITECTURE (Final Check)
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
           
+          # Check the Header
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
-          # Now it MUST imply AARCH64
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
              echo "SUCCESS: Binary matches AARCH64."
           else
-             echo "::error::FAILURE: Patch didn't work! Still shows: $MACHINE_TYPE"
+             # If this fails now, it means the disk write failed, which is impossible in CI.
+             echo "::error::FAILURE: Patch failed! Still shows: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
