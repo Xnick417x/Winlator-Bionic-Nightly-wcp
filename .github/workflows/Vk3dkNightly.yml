@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Final Python Fix)
+name: Build VKD3D-Proton (Ubuntu 22.04 Fix)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
   # JOB 1: STANDARD BUILD (LOCKED)
   # ==================================================================
   build-standard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Install Dependencies
         run: |
@@ -123,14 +123,15 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (WITH GUARANTEED PYTHON PATCH)
+  # JOB 2: ARM64EC BUILD (UBUNTU 22.04 + ROBUST PATCH)
   # ==================================================================
   build-arm64ec:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
+          # Remove system meson
           sudo apt-get remove -y meson || true
           
           sudo apt-get install -y --no-install-recommends \
@@ -138,6 +139,9 @@ jobs:
             build-essential python3 python3-venv python3-pip \
             pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
+
+          # Install pefile explicitly
+          pip3 install pefile
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -229,14 +233,11 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-      - name: SAFE PE HEADER PATCH (Installed & Run)
+      - name: ROBUST PYTHON PATCHER
         run: |
           echo "==================================================="
-          echo " INSTALLING PEFILE & PATCHING HEADERS..."
+          echo " PATCHING DLL HEADERS TO AARCH64 (0xAA64)"
           echo "==================================================="
-          
-          # FIX: Install pefile HERE to guarantee it is available for this script
-          pip3 install pefile
           
           chmod -R 777 final_package
           
@@ -244,6 +245,7 @@ jobs:
           import pefile
           import glob
           import sys
+          import os
 
           TARGET_MACHINE = 0xAA64 
 
@@ -257,40 +259,43 @@ jobs:
               try:
                   pe = pefile.PE(dll)
                   current_machine = pe.FILE_HEADER.Machine
-                  print(f"  -> Current Machine: {hex(current_machine)}")
-
+                  
                   if current_machine == 0xA641: # ARM64EC
-                      print("  -> Detected ARM64EC. Patching to AARCH64...")
+                      print("  -> Detected ARM64EC. Patching...")
                       pe.FILE_HEADER.Machine = TARGET_MACHINE
                       pe.OPTIONAL_HEADER.CheckSum = pe.generate_checksum()
                       pe.write(dll)
-                      print("  -> Success: File patched and saved.")
+                      pe.close()
+                      
+                      # Force flush just in case
+                      with open(dll, 'a') as f:
+                          os.fsync(f.fileno())
+                          
+                      print("  -> Success: File patched and flushed.")
                   elif current_machine == TARGET_MACHINE:
                       print("  -> Already AARCH64. Skipping.")
                   else:
                       print(f"  -> Unknown Machine Type {hex(current_machine)}. Skipping.")
-                  
-                  pe.close()
 
               except Exception as e:
                   print(f"  -> ERROR: {e}")
                   sys.exit(1)
           EOF
           
-          # Run with the same python that just installed pip packages
           python3 patch_pe.py
 
       - name: Verify Architecture (Final Check)
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE AFTER PATCH..."
+          
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
              echo "SUCCESS: Binary matches AARCH64."
           else
-             echo "::error::FAILURE: Header mismatch or corruption! Found: $MACHINE_TYPE"
+             echo "::error::FAILURE: Header mismatch! Found: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
