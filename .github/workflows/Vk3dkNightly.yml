@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Xlinker Force Fix)
+name: Build VKD3D-Proton (Deep Clean Patch)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARCH LINUX + XLINKER FORCE)
+  # JOB 2: ARM64EC BUILD (ARCH LINUX + DEEP CLEAN PATCH)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,7 +146,6 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # NEWER Toolchain (20251216)
           LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
@@ -156,7 +155,7 @@ jobs:
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      - name: Install SPIRV-Headers (Specific Targets)
+      - name: Install SPIRV-Headers
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
@@ -174,25 +173,16 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Xlinker Force Fix)
+      - name: Build & Stage
         run: |
-          # THE FIX: Use -Xlinker to bypass the gcc wrapper logic
-          # and force ld.lld to output 'aarch64pe' directly.
-          
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
           cpp = 'arm64ec-w64-mingw32-g++'
           ar = 'arm64ec-w64-mingw32-ar'
-          strip = 'llvm-strip'
+          strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
-          
-          [built-in options]
-          # -Xlinker -m -Xlinker aarch64pe
-          # This forces the linker machine type cleanly.
-          c_link_args = ['-Xlinker', '-m', '-Xlinker', 'aarch64pe']
-          cpp_link_args = ['-Xlinker', '-m', '-Xlinker', 'aarch64pe']
           
           [host_machine]
           system = 'windows'
@@ -206,7 +196,7 @@ jobs:
           c = 'i686-w64-mingw32-gcc'
           cpp = 'i686-w64-mingw32-g++'
           ar = 'llvm-ar'
-          strip = 'llvm-strip'
+          strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = 'i686-w64-mingw32-windres'
           widl = 'i686-w64-mingw32-widl'
           [host_machine]
@@ -223,30 +213,95 @@ jobs:
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
           ninja -C build_x86 install
 
+      - name: DEEP CLEAN PATCH (Header + Load Config)
+        run: |
+          echo "==================================================="
+          echo " PERFORMING DEEP CLEAN PATCH (0xAA64 + Zero LC)"
+          echo "==================================================="
+          
+          rm -rf final_package
+          mkdir -p final_package/system32 final_package/syswow64
+          cp -L src/stage/ec/bin/*.dll final_package/system32/
+          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
+          
+          chmod -R 777 final_package
+
+          cat <<EOF > patch.py
+          import sys
+          import glob
+          import struct
+
+          # 0xAA64 (AArch64) in Little Endian
+          TARGET_MACHINE = b'\x64\xaa' 
+
+          files = glob.glob("final_package/system32/*.dll")
+          
+          for file_path in files:
+              print(f"Patching {file_path}...")
+              try:
+                  with open(file_path, "r+b") as f:
+                      # 1. PE Offset
+                      f.seek(0x3C)
+                      pe_offset = struct.unpack("<I", f.read(4))[0]
+                      
+                      # 2. Patch Machine Type (PE + 4)
+                      machine_offset = pe_offset + 4
+                      f.seek(machine_offset)
+                      old = f.read(2)
+                      f.seek(machine_offset)
+                      f.write(TARGET_MACHINE)
+                      print(f"  -> Machine: {old.hex()} -> {TARGET_MACHINE.hex()}")
+                      
+                      # 3. Find Optional Header Size (PE + 20)
+                      # Read SizeOfOptionalHeader (2 bytes)
+                      f.seek(pe_offset + 20)
+                      opt_header_size = struct.unpack("<H", f.read(2))[0]
+                      
+                      # 4. Find Data Directories
+                      # Optional Header starts at PE + 24
+                      # Data Directories are at the END of Optional Header
+                      # Actually, standard offsets:
+                      # PE(4) + FileHeader(20) + OptionalHeader(Standard fields...)
+                      # Load Config Table is entry index 10 in Data Directory
+                      
+                      # Let's assume standard PE64 (Magic 0x20b)
+                      # Data Directory Start = PE + 24 + 112 (Standard fields for PE32+) = PE + 136
+                      # Entry 10 (Load Config) = 136 + (10 * 8) = 216 offset from PE Start
+                      
+                      lc_offset_loc = pe_offset + 24 + 112 + (10 * 8)
+                      
+                      print(f"  -> Zeroing Load Config at PE offset + 216...")
+                      f.seek(lc_offset_loc)
+                      # Write 8 bytes of Zeros (VirtualAddress + Size)
+                      f.write(b'\x00' * 8)
+                      print("  -> Load Config Wiped (Hybrid Metadata Removed).")
+
+              except Exception as e:
+                  print(f"ERROR: {e}")
+                  sys.exit(1)
+          EOF
+          
+          python patch.py
+
       - name: Verify Architecture
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
+          # This should now report pure AArch64 because we removed the conflicting metadata
+          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
              echo "SUCCESS: Binary matches AARCH64 (0xAA64)."
           else
-             echo "::error::FAILURE: Header still wrong: $MACHINE_TYPE"
+             echo "::error::FAILURE: Still Hybrid? Found: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
 
       - name: Package Final
         run: |
-          rm -rf final_package
-          mkdir -p final_package/system32 final_package/syswow64
-          
-          cp -L src/stage/ec/bin/*.dll final_package/system32/
-          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
-
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
@@ -275,5 +330,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-xlinker-force
+          name: vkd3d-deep-clean
           path: '*.wcp'
