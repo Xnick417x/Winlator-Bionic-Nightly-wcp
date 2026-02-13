@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Bylaws Full Flags Fix)
+name: Build VKD3D-Proton (Toolchain Strip Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (FULL FLAGS - COMPILE & LINK)
+  # JOB 2: ARM64EC BUILD (ARCH LINUX + EXPLICIT TOOLCHAIN STRIP)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # Using New Toolchain to support flags
+          # Use Arihany's Toolchain Version
           LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
@@ -156,13 +156,13 @@ jobs:
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      - name: Install SPIRV-Headers (AArch64)
+      - name: Install SPIRV-Headers (Specific Targets)
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Install to ALL paths
-          for trip in aarch64-w64-mingw32 arm64ec-w64-mingw32 i686-w64-mingw32; do
+          # Only x86/x64 (Arihany Logic)
+          for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
               cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
@@ -176,41 +176,33 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Native AArch64 + Full EC Support)
+      - name: Build & Stage (Toolchain Strip Fix)
         run: |
-          # THE FIX: We pass -marm64ec to BOTH Compiler AND Linker
+          # The Magic: Define 'strip' explicitly as the toolchain version
           
-          cat <<EOF > bylaws.ini
+          cat <<EOF > arm64ec.ini
           [binaries]
-          c = 'aarch64-w64-mingw32-clang'
-          cpp = 'aarch64-w64-mingw32-clang++'
-          ar = 'llvm-ar'
-          strip = 'llvm-strip'
-          windres = 'aarch64-w64-mingw32-windres'
-          widl = 'aarch64-w64-mingw32-widl'
-          
-          [built-in options]
-          # Compiler needs it to generate EC code
-          c_args = ['-marm64ec']
-          cpp_args = ['-marm64ec']
-          
-          # CRITICAL: Linker needs it to accept EC code and link correctly
-          c_link_args = ['-marm64ec', '-L/opt/llvm-mingw/arm64ec-w64-mingw32/lib']
-          cpp_link_args = ['-marm64ec', '-L/opt/llvm-mingw/arm64ec-w64-mingw32/lib']
+          c = 'arm64ec-w64-mingw32-gcc'
+          cpp = 'arm64ec-w64-mingw32-g++'
+          ar = 'arm64ec-w64-mingw32-ar'
+          # EXPLICIT STRIP PATH: Prevents system strip from breaking header
+          strip = '/opt/llvm-mingw/bin/llvm-strip'
+          windres = 'arm64ec-w64-mingw32-windres'
+          widl = 'arm64ec-w64-mingw32-widl'
           
           [host_machine]
           system = 'windows'
-          cpu_family = 'aarch64'
+          cpu_family = 'aarch64' # The Spoof
           cpu = 'aarch64'
           endian = 'little'
           EOF
 
           cat <<EOF > x86.ini
           [binaries]
-          c = 'i686-w64-mingw32-clang'
-          cpp = 'i686-w64-mingw32-clang++'
+          c = 'i686-w64-mingw32-gcc'
+          cpp = 'i686-w64-mingw32-g++'
           ar = 'llvm-ar'
-          strip = 'llvm-strip'
+          strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = 'i686-w64-mingw32-windres'
           widl = 'i686-w64-mingw32-widl'
           [host_machine]
@@ -221,8 +213,8 @@ jobs:
           EOF
 
           cd src
-          # Disable LTO to prevent linker confusion with hybrid objects
-          meson setup build_ec --cross-file ../bylaws.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true -Db_lto=false
+          # Enable stripping - Meson will now use the correct binary defined above
+          meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=true
           ninja -C build_ec install
           
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
@@ -233,7 +225,6 @@ jobs:
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          # This MUST be AARCH64 (0xAA64)
           MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
           
@@ -253,7 +244,6 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Dynamic JSON
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
@@ -282,5 +272,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-bylaws-docker
+          name: vkd3d-toolchain-strip
           path: '*.wcp'
