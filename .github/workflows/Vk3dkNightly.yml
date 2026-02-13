@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Locked + Job 2 FEX Logic)
+name: Build VKD3D-Proton (Job 1 Locked + Job 2 Arihany Exact)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Arihany Environment + FEX Flags)
+  # JOB 2: ARM64EC BUILD (Exact Arihany Environment)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -140,9 +140,11 @@ jobs:
     - name: Setup Arihany Build Env
       run: |
         python3 -m venv .venv
+        # EXACT VERSIONS from setup-llvm-meson.sh
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
         echo "$PWD/.venv/bin" >> $GITHUB_PATH
         
+        # Exact Toolchain from setup-llvm-meson.sh
         LLVM_TAG="20251216"
         TOOLCHAIN="/opt/llvm-mingw"
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -150,11 +152,12 @@ jobs:
         sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
         echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
 
-    - name: Install SPIRV-Headers (Arihany Fix)
+    - name: Install SPIRV-Headers (Strict Match)
+      # Matches setup-llvm-meson.sh logic (only copies to x86_64 and i686)
       run: |
         SPV_TMP="$(mktemp -d)"
         git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-        for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
+        for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
           if [ -d "/opt/llvm-mingw/$trip/include" ]; then
             sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
             sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
@@ -174,15 +177,15 @@ jobs:
         COMMIT_HASH=$(git rev-parse --short HEAD)
         echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-    - name: Build & Stage
+    - name: Build & Stage (Arihany Logic)
       run: |
-        # Exact settings from your arm64ec.meson.ini.txt
-        # THE SPOOF: cpu_family='aarch64' + arm64ec-gcc compiler
+        # CROSS-FILE: Exact match of arm64ec.meson.ini.txt
+        # Uses GCC ALIASES (Critical!) and SPOOFS 'aarch64' (Critical!)
         cat <<EOF > arm64ec.ini
         [binaries]
         c = 'arm64ec-w64-mingw32-gcc'
         cpp = 'arm64ec-w64-mingw32-g++'
-        ar = 'llvm-ar'
+        ar = 'arm64ec-w64-mingw32-ar'
         strip = 'llvm-strip'
         windres = 'arm64ec-w64-mingw32-windres'
         widl = 'arm64ec-w64-mingw32-widl'
@@ -209,28 +212,28 @@ jobs:
         EOF
 
         cd src
-        # THE FEX FLAGS: Disable LTO (-Db_lto=false)
-        # Disable auto-strip so we can do it manually later
-        meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false -Db_lto=false
+        # Build logic matches guts-arm64ec.sh
+        # We do NOT disable LTO because she does not.
+        meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
         ninja -C build_ec install
         
         meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
         ninja -C build_x86 install
 
-    - name: Package ARM64EC (ZSTD Compressed + Strip All)
+    - name: Package ARM64EC (Arihany Packing)
       run: |
         rm -rf final_package
         mkdir -p final_package/system32 final_package/syswow64
         
-        # Copy from staging
+        # Copy from Staging
         cp -L src/stage/ec/bin/*.dll final_package/system32/
         cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-        # [cite_start]THE FEX STRIP: Use --strip-all (matches FEX script line 11) [cite: 11]
+        # Manual Strip using --strip-all (Matches packing.sh line 79)
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-        # Dynamic JSON Generation
+        # Dynamic JSON Generation with correct Targets
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
@@ -242,12 +245,12 @@ jobs:
             files: []
           }' > final_package/profile.json
 
-        # Populate JSON
         for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
             [ -e "$f" ] || continue
             REL_PATH=${f#final_package/}
             FOLDER=$(dirname "$REL_PATH")
             
+            # Explicit targets
             if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
             
             jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
@@ -255,7 +258,7 @@ jobs:
                final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
         done
 
-        # THE ARIHANY PACKAGING: ZSTD + Numeric Owner
+        # PACKING: ZSTD + Numeric Owner (Exact match packing.sh line 107)
         chmod -R 777 final_package
         cd final_package
         tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
