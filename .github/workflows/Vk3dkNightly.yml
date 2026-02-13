@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Direct Linker Fix)
+name: Build VKD3D-Proton (Xlinker Force Fix)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (DIRECT LINKER OVERRIDE)
+  # JOB 2: ARM64EC BUILD (ARCH LINUX + XLINKER FORCE)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,8 +146,8 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          # Stable Toolchain
-          LLVM_TAG="20251104"
+          # NEWER Toolchain (20251216)
+          LLVM_TAG="20251216"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -160,8 +160,6 @@ jobs:
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          
-          # Only x86/x64 (Arihany Logic)
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -176,10 +174,10 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Linker Override)
+      - name: Build & Stage (Xlinker Force Fix)
         run: |
-          # THE FIX: We explicitly define 'c_ld' and 'cpp_ld' to use lld-link.
-          # This bypasses the gcc wrapper and lets us use native Windows flags.
+          # THE FIX: Use -Xlinker to bypass the gcc wrapper logic
+          # and force ld.lld to output 'aarch64pe' directly.
           
           cat <<EOF > arm64ec.ini
           [binaries]
@@ -190,15 +188,11 @@ jobs:
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
           
-          # Direct Linker Override
-          c_ld = 'lld-link'
-          cpp_ld = 'lld-link'
-          
           [built-in options]
-          # Force Machine Type: ARM64 (0xAA64)
-          # We also ignore the warning about target mismatch (4264)
-          c_link_args = ['-machine:arm64', '-ignore:4264']
-          cpp_link_args = ['-machine:arm64', '-ignore:4264']
+          # -Xlinker -m -Xlinker aarch64pe
+          # This forces the linker machine type cleanly.
+          c_link_args = ['-Xlinker', '-m', '-Xlinker', 'aarch64pe']
+          cpp_link_args = ['-Xlinker', '-m', '-Xlinker', 'aarch64pe']
           
           [host_machine]
           system = 'windows'
@@ -240,7 +234,7 @@ jobs:
           if echo "$MACHINE_TYPE" | grep -q "AARCH64"; then
              echo "SUCCESS: Binary matches AARCH64 (0xAA64)."
           else
-             echo "::error::FAILURE: Header is still wrong: $MACHINE_TYPE"
+             echo "::error::FAILURE: Header still wrong: $MACHINE_TYPE"
              exit 1
           fi
           echo "=========================================="
@@ -281,5 +275,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-direct-linker
+          name: vkd3d-xlinker-force
           path: '*.wcp'
