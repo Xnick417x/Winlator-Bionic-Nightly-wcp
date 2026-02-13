@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (Exact Arihany Environment)
+  # JOB 2: ARM64EC BUILD (Arihany Environment + AArch64 Spoof)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -144,7 +144,7 @@ jobs:
         .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
         echo "$PWD/.venv/bin" >> $GITHUB_PATH
         
-        # Exact Toolchain from setup-llvm-meson.sh
+        # Toolchain 20251216 (Arihany's exact version)
         LLVM_TAG="20251216"
         TOOLCHAIN="/opt/llvm-mingw"
         wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -154,6 +154,7 @@ jobs:
 
     - name: Install SPIRV-Headers (Strict Match)
       # Matches setup-llvm-meson.sh logic (only copies to x86_64 and i686)
+      # NOTE: She does NOT copy to arm64ec here, so we won't either.
       run: |
         SPV_TMP="$(mktemp -d)"
         git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
@@ -213,7 +214,6 @@ jobs:
 
         cd src
         # Build logic matches guts-arm64ec.sh
-        # We do NOT disable LTO because she does not.
         meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
         ninja -C build_ec install
         
@@ -233,7 +233,7 @@ jobs:
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
         /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-        # Dynamic JSON Generation with correct Targets
+        # Dynamic JSON Generation with your requested Description
         echo "{}" > final_package/profile.json
         jq -n \
           --arg vn "${{ env.VERSION_NAME }}" \
