@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Exact - Verified)
+name: Build VKD3D-Proton (Arihany Fix - Reordered)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - MESON 1.2.3 FORCED)
+  # JOB 2: ARM64EC BUILD (ARIHANY EXACT - REORDERED)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -131,20 +131,27 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update -y
-          # FIX 1: Explicitly REMOVE any system meson that might exist on the runner
+          # FIX: Explicitly REMOVE any system meson to prevent interference
           sudo apt-get remove -y meson || true
           
-          # FIX 2: Install ONLY build tools, NO meson via apt
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-venv python3-pip \
             pkg-config cmake ninja-build zstd dos2unix perl tar unzip \
             llvm crossbuild-essential-arm64
 
+      # FIX: Checkout FIRST so we don't wipe the venv later
+      - name: Checkout VKD3D
+        uses: actions/checkout@v4
+        with:
+          repository: HansKristian-Work/vkd3d-proton
+          submodules: recursive
+          path: src
+
       - name: Setup Arihany Build Env
         run: |
           python3 -m venv .venv
-          # FIX 3: Install EXACT version 1.2.3 in venv
+          # Install EXACT version 1.2.3 in venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
           
@@ -168,13 +175,6 @@ jobs:
             fi
           done
 
-      - name: Checkout VKD3D
-        uses: actions/checkout@v4
-        with:
-          repository: HansKristian-Work/vkd3d-proton
-          submodules: recursive
-          path: src
-
       - name: Generate Version Name
         run: |
           cd src
@@ -183,11 +183,13 @@ jobs:
 
       - name: Build & Stage (Arihany Logic)
         run: |
-          # FIX 4: Verify we are using the OLD meson 1.2.3
-          echo "Checking meson version..."
-          ../.venv/bin/meson --version
+          # Use absolute path to ensure we hit the VENV meson
+          MESON_BIN="$GITHUB_WORKSPACE/.venv/bin/meson"
           
-          # Cross-file
+          echo "Checking meson version..."
+          $MESON_BIN --version
+          
+          # Cross-file from arm64ec.meson.ini.txt
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -219,12 +221,12 @@ jobs:
           EOF
 
           cd src
-          # FIX 5: EXPLICITLY Call the venv meson. Do not rely on PATH.
-          ../.venv/bin/meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
+          # Build ARM64EC (Using absolute path to Meson 1.2.3)
+          $MESON_BIN setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
           ninja -C build_ec install
           
           # Build x86
-          ../.venv/bin/meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
+          $MESON_BIN setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86"
           ninja -C build_x86 install
 
       - name: VERIFY ARCHITECTURE (The Death Check)
@@ -258,7 +260,7 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # Manual Strip
+          # Manual Strip from packing.sh
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
@@ -284,7 +286,7 @@ jobs:
                  final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
           done
 
-          # Packing with ZSTD + Numeric Owner
+          # Packing with ZSTD + Numeric Owner from packing.sh
           chmod -R 777 final_package
           cd final_package
           tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
