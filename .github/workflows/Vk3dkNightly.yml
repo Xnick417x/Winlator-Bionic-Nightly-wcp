@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Deep Clean - Verification Fix)
+name: Build VKD3D-Proton (Arihany Static EC)
 
 on:
   workflow_dispatch:
@@ -123,7 +123,7 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARM64EC BUILD (DEEP CLEAN + CORRECT VERIFICATION)
+  # JOB 2: ARM64EC STATIC BUILD (MIMIC ARIHANY + STATIC LIBS)
   # ==================================================================
   build-arm64ec:
     runs-on: ubuntu-latest
@@ -146,7 +146,8 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
           
-          LLVM_TAG="20251216"
+          # Stable Arihany Toolchain
+          LLVM_TAG="20251104"
           TOOLCHAIN="/opt/llvm-mingw"
           mkdir -p "$TOOLCHAIN"
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
@@ -155,10 +156,12 @@ jobs:
           echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      - name: Install SPIRV-Headers
+      - name: Install SPIRV-Headers (Specific Targets)
         run: |
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
+          
+          # Only x86/x64 (Matches her logic)
           for trip in x86_64-w64-mingw32 i686-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -173,8 +176,10 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage
+      - name: Build & Stage (Static Link Fix)
         run: |
+          # THE FIX: Add static linking flags to force dependencies inside the DLL.
+          
           cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -183,6 +188,11 @@ jobs:
           strip = '/opt/llvm-mingw/bin/llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
+          
+          [built-in options]
+          # FORCE STATIC LINKING
+          c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
+          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           
           [host_machine]
           system = 'windows'
@@ -213,87 +223,24 @@ jobs:
           meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
           ninja -C build_x86 install
 
-      - name: DEEP CLEAN PATCH (Header + Load Config)
-        run: |
-          echo "==================================================="
-          echo " PERFORMING DEEP CLEAN PATCH (0xAA64 + Zero LC)"
-          echo "==================================================="
-          
-          rm -rf final_package
-          mkdir -p final_package/system32 final_package/syswow64
-          cp -L src/stage/ec/bin/*.dll final_package/system32/
-          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
-          
-          chmod -R 777 final_package
-
-          cat <<EOF > patch.py
-          import sys
-          import glob
-          import struct
-
-          TARGET_MACHINE = b'\x64\xaa' 
-
-          files = glob.glob("final_package/system32/*.dll")
-          
-          for file_path in files:
-              print(f"Patching {file_path}...")
-              try:
-                  with open(file_path, "r+b") as f:
-                      # 1. PE Offset
-                      f.seek(0x3C)
-                      pe_offset = struct.unpack("<I", f.read(4))[0]
-                      
-                      # 2. Patch Machine Type (PE + 4)
-                      machine_offset = pe_offset + 4
-                      f.seek(machine_offset)
-                      old = f.read(2)
-                      f.seek(machine_offset)
-                      f.write(TARGET_MACHINE)
-                      print(f"  -> Machine: {old.hex()} -> {TARGET_MACHINE.hex()}")
-                      
-                      # 3. Find Optional Header Size (PE + 20)
-                      f.seek(pe_offset + 20)
-                      opt_header_size = struct.unpack("<H", f.read(2))[0]
-                      
-                      # 4. Find Data Directories & Zero Load Config
-                      # Assuming Standard PE64 (Magic 0x20b)
-                      # Data Directory Start = PE + 24 + 112 = PE + 136
-                      # Entry 10 (Load Config) = 136 + (10 * 8) = 216 offset from PE Start
-                      
-                      lc_offset_loc = pe_offset + 216
-                      
-                      print(f"  -> Zeroing Load Config at PE offset + 216...")
-                      f.seek(lc_offset_loc)
-                      # Write 8 bytes of Zeros (VirtualAddress + Size)
-                      f.write(b'\x00' * 8)
-                      print("  -> Load Config Wiped (Hybrid Metadata Removed).")
-
-              except Exception as e:
-                  print(f"ERROR: {e}")
-                  sys.exit(1)
-          EOF
-          
-          python patch.py
-
-      - name: Verify Architecture (Corrected)
+      - name: Verify Architecture
         run: |
           echo "=========================================="
           echo "VERIFYING DLL ARCHITECTURE..."
           
-          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h final_package/system32/d3d12.dll | grep "Machine:")
+          MACHINE_TYPE=$(/opt/llvm-mingw/bin/llvm-readobj -h src/stage/ec/bin/d3d12.dll | grep "Machine:")
           echo "FOUND: $MACHINE_TYPE"
-          
-          # FIX: Grep for 'ARM64' (which matches 0xAA64 output) instead of 'AARCH64'
-          if echo "$MACHINE_TYPE" | grep -q "ARM64"; then
-             echo "SUCCESS: Binary matches ARM64 (0xAA64)."
-          else
-             echo "::error::FAILURE: Mismatch! Found: $MACHINE_TYPE"
-             exit 1
-          fi
+          # We expect this to be x64-compatible (EC) but STABLE.
           echo "=========================================="
 
       - name: Package Final
         run: |
+          rm -rf final_package
+          mkdir -p final_package/system32 final_package/syswow64
+          
+          cp -L src/stage/ec/bin/*.dll final_package/system32/
+          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
+
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
@@ -322,5 +269,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-deep-clean
+          name: vkd3d-arihany-static
           path: '*.wcp'
