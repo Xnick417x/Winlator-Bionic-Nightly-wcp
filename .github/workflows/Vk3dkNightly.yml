@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Job 1 Restored + Arihany Complete)
+name: Build VKD3D-Proton (Job 1 Latest + Job 2 Arihany 22.04)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (EXACT COPY OF YOUR WORKING LOGIC)
+  # JOB 1: STANDARD BUILD (UBUNTU-LATEST - UNTOUCHED)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -97,21 +97,27 @@ jobs:
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
           
-          # Standard JSON (Working)
-          cat <<EOF > final_package/profile.json
-          {
-            "type": "VKD3D",
-            "versionName": "${{ env.VERSION_NAME }}",
-            "versionCode": 0,
-            "description": "vkd3d-proton Nightly",
-            "files": [
-              {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
-              {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
-              {"source": "syswow64/d3d12.dll", "target": "\${syswow64}/d3d12.dll"},
-              {"source": "syswow64/d3d12core.dll", "target": "\${syswow64}/d3d12core.dll"}
-            ]
-          }
-          EOF
+          # Exact JSON logic from your file
+          echo "{}" > final_package/profile.json
+          jq -n \
+            --arg vn "${{ env.VERSION_NAME }}" \
+            '{
+              type: "VKD3D",
+              versionName: $vn,
+              versionCode: 0,
+              description: ("vkd3d-proton Nightly " + $vn),
+              files: []
+            }' > final_package/profile.json
+
+          for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
+              [ -e "$f" ] || continue
+              REL_PATH=${f#final_package/}
+              FOLDER=$(dirname "$REL_PATH")
+              if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
+              jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
+                 '.files += [{"source": $src, "target": $tgt}]' \
+                 final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
+          done
           
           cd final_package
           tar -cJf ../VKD3D-Proton-${{ env.VERSION_NAME }}.wcp *
@@ -124,16 +130,47 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARIHANY ARM64EC (COMPLETE REPLICATION)
+  # JOB 2: ARIHANY REPLICA (UBUNTU 22.04 + STATIC + SPOOF)
   # ==================================================================
   build-arm-arihany:
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
+    runs-on: ubuntu-22.04 # FORCED OLDER UBUNTU
     steps:
       - name: Install Dependencies
         run: |
-          pacman -Sy --noconfirm git base-devel glslang python python-pip cmake ninja jq wget tar zstd llvm
+          sudo apt-get update -y
+          # Exact deps from your file
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates curl xz-utils jq git glslang-tools \
+            build-essential python3 python3-venv python3-pip \
+            pkg-config cmake zstd dos2unix perl tar unzip \
+            llvm crossbuild-essential-arm64
+
+      - name: Setup Arihany Build Env
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+          
+          # USING 20251216 Toolchain (From your file)
+          LLVM_TAG="20251216"
+          TOOLCHAIN="/opt/llvm-mingw"
+          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
+          sudo rm -rf "$TOOLCHAIN" && sudo mkdir -p "$TOOLCHAIN"
+          sudo tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
+          echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
+
+      - name: Install SPIRV-Headers
+        run: |
+          SPV_TMP="$(mktemp -d)"
+          git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
+          
+          # Install to ALL targets
+          for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
+            if [ -d "/opt/llvm-mingw/$trip/include" ]; then
+              sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
+              sudo cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
+            fi
+          done
 
       - name: Checkout VKD3D
         uses: actions/checkout@v4
@@ -142,50 +179,26 @@ jobs:
           submodules: recursive
           path: src
 
-      - name: Setup Toolchain (Arihany 20251104)
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install "meson==1.2.3" "ninja==1.11.1"
-          LLVM_TAG="20251104"
-          TOOLCHAIN="/opt/llvm-mingw"
-          mkdir -p "$TOOLCHAIN"
-          wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_TAG/llvm-mingw-$LLVM_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          tar -C "$TOOLCHAIN" --strip-components=1 -xJf llvm.tar.xz
-          echo "$TOOLCHAIN/bin" >> $GITHUB_PATH
-          echo "$PWD/.venv/bin" >> $GITHUB_PATH
-
-      - name: Install SPIRV-Headers
-        run: |
-          SPV_TMP="$(mktemp -d)"
-          git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
-          # Install to ALL paths to ensure both ARM and x86 builds find them
-          for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
-            if [ -d "/opt/llvm-mingw/$trip/include" ]; then
-              mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
-              cp -r "$SPV_TMP/include/spirv/"* "/opt/llvm-mingw/$trip/include/spirv/"
-            fi
-          done
-
       - name: Generate Version Name
         run: |
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (Static Link + ARM64EC + x86)
+      - name: Build & Stage (With Static Link Fix)
         run: |
-          # 1. ARM64EC (Hybrid for system32) - STATIC LINKED
-          cat <<EOF > arm.ini
+          # 1. ARM64EC (GCC + STATIC LINKING)
+          cat <<EOF > arm64ec.ini
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
           cpp = 'arm64ec-w64-mingw32-g++'
           ar = 'arm64ec-w64-mingw32-ar'
-          strip = '/opt/llvm-mingw/bin/llvm-strip'
+          strip = 'llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
           
           [built-in options]
-          # Static Link Fix
+          # REQUIRED: Static link to fix Winlator crash
           c_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
           
@@ -196,7 +209,7 @@ jobs:
           endian = 'little'
           EOF
 
-          # 2. x86 (Standard 32-bit for syswow64) - STATIC LINKED
+          # 2. x86 (Standard 32-bit)
           cat <<EOF > x86.ini
           [binaries]
           c = 'i686-w64-mingw32-gcc'
@@ -218,39 +231,60 @@ jobs:
           EOF
 
           cd src
-          # Build ARM64EC (System32)
-          meson setup build_arm --cross-file ../arm.ini --buildtype release --prefix "$PWD/stage/arm" -Dstrip=true
-          ninja -C build_arm install
-
-          # Build x86 (SysWoW64)
-          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=true
+          # Build EC (No Strip yet)
+          meson setup build_ec --cross-file ../arm64ec.ini --buildtype release --prefix "$PWD/stage/ec" -Dstrip=false
+          ninja -C build_ec install
+          
+          # Build x86 (No Strip yet)
+          meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=false
           ninja -C build_x86 install
 
-      - name: Binary Patch (Arihany 0xAA64 Spoof)
+      - name: Package & Spoof
         run: |
-          # Patch ONLY the ARM64EC files in system32. 
-          # The x86 files in syswow64 must remain standard x86.
-          for dll in src/stage/arm/bin/*.dll; do
+          rm -rf final_package
+          mkdir -p final_package/system32 final_package/syswow64
+          
+          # COPY BOTH ARCHITECTURES
+          cp -L src/stage/ec/bin/*.dll final_package/system32/
+          cp -L src/stage/x86/bin/*.dll final_package/syswow64/
+
+          # 1. Manual Strip (Matches your file)
+          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
+          /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
+
+          # 2. HEADER SPOOF (System32 ONLY)
+          for dll in final_package/system32/*.dll; do
              python3 -c "import sys; f=open(sys.argv[1], 'r+b'); f.seek(0x3C); pe=int.from_bytes(f.read(4), 'little'); f.seek(pe+4); f.write(b'\x64\xaa'); f.close()" "$dll"
           done
 
-      - name: Package Optimized (Complete with JSON)
-        run: |
-          rm -rf pkg_arm
-          mkdir -p pkg_arm/system32 pkg_arm/syswow64
-          
-          # Copy ARM64EC files to system32
-          cp src/stage/arm/bin/*.dll pkg_arm/system32/
-          
-          # Copy x86 files to syswow64 (THIS WAS THE MISSING KEY!)
-          cp src/stage/x86/bin/*.dll pkg_arm/syswow64/
-          
-          # Correct JSON with ALL 4 files + Descriptions + Version Name
-          echo "{\"type\": \"VKD3D\", \"versionName\": \"${{ env.VERSION_NAME }}\", \"versionCode\": 0, \"description\": \"vkd3d-proton FEX Optimized (Arihany)\", \"files\": [{\"source\": \"system32/d3d12.dll\", \"target\": \"\${system32}/d3d12.dll\"}, {\"source\": \"system32/d3d12core.dll\", \"target\": \"\${system32}/d3d12core.dll\"}, {\"source\": \"syswow64/d3d12.dll\", \"target\": \"\${syswow64}/d3d12.dll\"}, {\"source\": \"syswow64/d3d12core.dll\", \"target\": \"\${syswow64}/d3d12core.dll\"}]}" > pkg_arm/profile.json
-          
-          cd pkg_arm && tar -cJf ../vk3dk-Arm64ec.wcp *
+          # 3. Dynamic JSON (Uses your exact jq logic)
+          echo "{}" > final_package/profile.json
+          jq -n \
+            --arg vn "${{ env.VERSION_NAME }}" \
+            '{
+              type: "VKD3D",
+              versionName: $vn,
+              versionCode: 0,
+              description: ("vkd3d-proton ARM64EC " + $vn),
+              files: []
+            }' > final_package/profile.json
 
-      - name: Upload ARM Artifact
+          for f in final_package/system32/*.dll final_package/syswow64/*.dll; do
+              [ -e "$f" ] || continue
+              REL_PATH=${f#final_package/}
+              FOLDER=$(dirname "$REL_PATH")
+              if [[ "$FOLDER" == "system32" ]]; then TARGET="\${system32}"; else TARGET="\${syswow64}"; fi
+              jq --arg src "$REL_PATH" --arg tgt "$TARGET/$(basename "$f")" \
+                 '.files += [{"source": $src, "target": $tgt}]' \
+                 final_package/profile.json > final_package/tmp.json && mv final_package/tmp.json final_package/profile.json
+          done
+
+          # 4. Packaging
+          chmod -R 777 final_package
+          cd final_package
+          tar --zstd --format=gnu --owner=0 --group=0 --numeric-owner -cf ../vk3dk-Arm64ec.wcp *
+
+      - name: Upload ARM64EC Artifact
         uses: actions/upload-artifact@v4
         with:
           name: vk3dk-Arm64ec
