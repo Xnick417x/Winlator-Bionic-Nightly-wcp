@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany GCC + Fixes)
+name: Build VKD3D-Proton (Arihany GCC + XZ + Root Fix)
 
 on:
   workflow_dispatch:
@@ -123,10 +123,10 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARIHANY REPLICA (GCC + STATIC + FRIEND'S PACKAGING FIX)
+  # JOB 2: ARIHANY REPLICA (GCC + STATIC + XZ PACKAGING FIX)
   # ==================================================================
   build-arm-arihany:
-    runs-on: ubuntu-22.04 # Arihany's Environment
+    runs-on: ubuntu-22.04 # Match Arihany's Environment
     steps:
       - name: Install Dependencies
         run: |
@@ -174,7 +174,7 @@ jobs:
 
       - name: Build & Stage (GCC + STATIC)
         run: |
-          # 1. ARM64EC (Using GCC Wrapper - Arihany Method)
+          # 1. ARM64EC (Using GCC Wrapper)
           cat <<EOF > arm64ec.ini
           [binaries]
           c       = 'arm64ec-w64-mingw32-gcc'
@@ -238,7 +238,7 @@ jobs:
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-          # 1. FIXED JSON: Uses versionCode: 1 (Critical) + Your Dynamic Description
+          # 1. FIXED JSON: Uses versionCode: 1 + Your Dynamic Description
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -270,8 +270,8 @@ jobs:
           cd final_package
           
           # 2. FIXED PACKAGING: 
-          # -J = XZ Compression (Matches Friend's Method)
-          # .  = Parent Directory Structure (The missing piece)
+          # -cJf = Create XZ archive (Matches working artifact)
+          # .    = Parent Directory Structure (The missing piece)
           tar -cJf ../vk3dk-Arm64ec.wcp .
 
       - name: Upload ARM64EC Artifact
