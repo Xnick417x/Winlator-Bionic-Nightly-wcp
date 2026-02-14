@@ -1,4 +1,4 @@
-name: Build VKD3D-Proton (Arihany Pure - No Spoof)
+name: Build VKD3D-Proton (Arihany Pure GCC)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==================================================================
-  # JOB 1: STANDARD BUILD (LOCKED - Source: Vk3dkNightlynoarm23.yml.txt)
+  # JOB 1: STANDARD BUILD (EXACT COPY FROM Vk3dkNightlynoarm23.yml.txt)
   # ==================================================================
   build-standard:
     runs-on: ubuntu-latest
@@ -124,10 +124,10 @@ jobs:
 
 
   # ==================================================================
-  # JOB 2: ARIHANY REPLICA (GCC + STATIC + NO PATCH)
+  # JOB 2: ARIHANY PURE GCC (No Header Spoofing)
   # ==================================================================
   build-arm-arihany:
-    runs-on: ubuntu-22.04 # Arihany's Environment
+    runs-on: ubuntu-22.04 # Match Arihany's Environment
     steps:
       - name: Install Dependencies
         run: |
@@ -154,7 +154,7 @@ jobs:
           SPV_TMP="$(mktemp -d)"
           git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git "$SPV_TMP"
           
-          # Install to ALL targets (Including ARM64EC)
+          # Install to ALL targets
           for trip in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
             if [ -d "/opt/llvm-mingw/$trip/include" ]; then
               sudo mkdir -p "/opt/llvm-mingw/$trip/include/spirv"
@@ -175,7 +175,7 @@ jobs:
           COMMIT_HASH=$(git rev-parse --short HEAD)
           echo "VERSION_NAME=3.0b-ARM64EC-${COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Build & Stage (GCC + STATIC)
+      - name: Build & Stage (GCC + STATIC + NO PATCH)
         run: |
           # 1. ARM64EC (Using GCC Wrapper - Matches Arihany)
           cat <<EOF > arm64ec.ini
@@ -233,7 +233,7 @@ jobs:
           .venv/bin/meson setup build_x86 --cross-file ../x86.ini --buildtype release --prefix "$PWD/stage/x86" -Dstrip=false
           .venv/bin/ninja -C build_x86 install
 
-      - name: Package
+      - name: Package (Arihany Numeric Packing)
         run: |
           rm -rf final_package
           mkdir -p final_package/system32 final_package/syswow64
@@ -242,11 +242,11 @@ jobs:
           cp -L src/stage/ec/bin/*.dll final_package/system32/
           cp -L src/stage/x86/bin/*.dll final_package/syswow64/
 
-          # 1. Manual Strip (Matches Arihany's exact method)
+          # 1. Manual Strip
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/system32/*.dll
           /opt/llvm-mingw/bin/llvm-strip --strip-all final_package/syswow64/*.dll
 
-          # 2. Dynamic JSON (NO SPOOFING)
+          # 2. Dynamic JSON (Uses your exact jq logic)
           echo "{}" > final_package/profile.json
           jq -n \
             --arg vn "${{ env.VERSION_NAME }}" \
