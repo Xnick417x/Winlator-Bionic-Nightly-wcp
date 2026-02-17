@@ -33,6 +33,20 @@ jobs:
           
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
+      - name: Install SPIRV-Headers (Critical Fix)
+        run: |
+          # Matches logic from setup-llvm-meson.sh
+          # VKD3D needs these headers available in the toolchain include path
+          git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Headers.git spirv_tmp
+          
+          for arch in x86_64-w64-mingw32 i686-w64-mingw32 arm64ec-w64-mingw32; do
+            if [ -d "/opt/llvm-mingw/$arch/include" ]; then
+              sudo mkdir -p "/opt/llvm-mingw/$arch/include/spirv"
+              sudo cp -r spirv_tmp/include/spirv/* "/opt/llvm-mingw/$arch/include/spirv/"
+            fi
+          done
+          rm -rf spirv_tmp
+
       - name: Checkout VKD3D-Proton
         uses: actions/checkout@v4
         with:
@@ -51,6 +65,7 @@ jobs:
 
       - name: Build ARM64EC & x86
         run: |
+          # 1. ARM64EC: GCC + Static + aarch64 (Matches arm64ec.meson.ini)
           cat <<EOF > arm64ec.txt
           [binaries]
           c = 'arm64ec-w64-mingw32-gcc'
@@ -72,6 +87,8 @@ jobs:
           endian = 'little'
           EOF
 
+          # 2. x86: GCC + Static + i686
+          # Using GCC wrapper here for consistency and reliable static linking
           cat <<EOF > x86.txt
           [binaries]
           c = 'i686-w64-mingw32-gcc'
@@ -95,10 +112,11 @@ jobs:
 
           cd src
           
-          meson setup build-ec --cross-file ../arm64ec.txt -Dbuildtype=release -Dstrip=true
+          # Removed -Dstrip=true to handle stripping explicitly later
+          meson setup build-ec --cross-file ../arm64ec.txt -Dbuildtype=release
           ninja -C build-ec
 
-          meson setup build-x86 --cross-file ../x86.txt -Dbuildtype=release -Dstrip=true
+          meson setup build-x86 --cross-file ../x86.txt -Dbuildtype=release
           ninja -C build-x86
 
       - name: Package Artifacts
@@ -112,6 +130,7 @@ jobs:
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
 
+          # Explicit Strip (Matches packing.sh)
           find final_package -name "*.dll" -exec llvm-strip --strip-all {} \;
 
           cat <<EOF > final_package/profile.json
@@ -143,6 +162,7 @@ jobs:
 
           cd final_package
           
+          # Using '.' to include the ./ prefix as requested
           tar --format=gnu --owner=0 --group=0 --numeric-owner --sort=name -cf ../archive.tar .
           
           cd ..
