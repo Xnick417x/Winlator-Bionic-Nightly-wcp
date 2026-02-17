@@ -63,7 +63,7 @@ jobs:
           [host_machine]
           system = 'windows'
           cpu_family = 'aarch64'
-          cpu = 'arm64ec'
+          cpu = 'aarch64'
           endian = 'little'
           EOF
 
@@ -104,7 +104,6 @@ jobs:
 
           find src/build-ec -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-ec -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
-
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
 
@@ -115,7 +114,7 @@ jobs:
             "type": "VKD3D",
             "versionName": "${{ env.VERSION_NAME }}",
             "versionCode": 0,
-            "description": "VKD3D-Proton-${{ env.VERSION_NAME }}-Nightly",
+            "description": "Vk3dk-Proton ${{ env.VERSION_NAME }} nightly",
             "files": [
               {
                 "source": "system32/d3d12.dll",
