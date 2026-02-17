@@ -15,7 +15,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             ca-certificates curl xz-utils jq git glslang-tools \
             build-essential python3 python3-pip pkg-config \
-            meson ninja-build zstd
+            ninja-build zstd
+          
+          python3 -m pip install --upgrade pip
+          python3 -m pip install meson
 
       - name: Setup Toolchain (llvm-mingw)
         run: |
@@ -48,11 +51,10 @@ jobs:
 
       - name: Build ARM64EC & x86
         run: |
-          # ARM64EC Cross File
           cat <<EOF > arm64ec.txt
           [binaries]
-          c = 'arm64ec-w64-mingw32-clang'
-          cpp = 'arm64ec-w64-mingw32-clang++'
+          c = 'arm64ec-w64-mingw32-gcc'
+          cpp = 'arm64ec-w64-mingw32-g++'
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
@@ -65,13 +67,10 @@ jobs:
           endian = 'little'
           EOF
 
-          # x86 (32-bit) Cross File - WITH STATIC LINKING
-          # We add [built-in options] to force static linking of runtimes.
-          # This prevents dependency on missing dlls like libgcc_s_dw2-1.dll in Ludashi.
           cat <<EOF > x86.txt
           [binaries]
-          c = 'i686-w64-mingw32-clang'
-          cpp = 'i686-w64-mingw32-clang++'
+          c = 'i686-w64-mingw32-gcc'
+          cpp = 'i686-w64-mingw32-g++'
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
@@ -79,8 +78,8 @@ jobs:
           pkg-config = 'pkg-config'
           
           [built-in options]
-          c_link_args = ['-static', '-static-libgcc']
-          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
+          c_link_args = ['-static', '-static-libgcc', '-Wl,--file-alignment,4096']
+          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++', '-Wl,--file-alignment,4096']
 
           [host_machine]
           system = 'windows'
@@ -91,11 +90,9 @@ jobs:
 
           cd src
           
-          # Build ARM64EC
           meson setup build-ec --cross-file ../arm64ec.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-ec
 
-          # Build x86
           meson setup build-x86 --cross-file ../x86.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x86
 
@@ -111,12 +108,14 @@ jobs:
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
 
+          find final_package -name "*.dll" -exec llvm-strip --strip-all {} \;
+
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
             "versionName": "${{ env.VERSION_NAME }}",
             "versionCode": 0,
-            "description": "VKD3D-Proton ${{ env.VERSION_NAME }} Nightly",
+            "description": "VKD3D-Proton-${{ env.VERSION_NAME }}-Nightly",
             "files": [
               {
                 "source": "system32/d3d12.dll",
@@ -139,7 +138,9 @@ jobs:
           EOF
 
           cd final_package
-          tar -cf ../archive.tar *
+          
+          tar --format=gnu --owner=0 --group=0 --numeric-owner --sort=name -cf ../archive.tar .
+          
           cd ..
           xz -9 archive.tar
           mv archive.tar.xz VKD3D-Proton-${{ env.VERSION_NAME }}.wcp
