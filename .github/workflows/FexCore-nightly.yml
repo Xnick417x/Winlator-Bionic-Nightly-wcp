@@ -1,4 +1,4 @@
-name: Build FEXCore Nightly
+name: Build FexCore Nightly
 
 on:
   workflow_dispatch:
