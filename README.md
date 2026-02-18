@@ -23,12 +23,12 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 | Component | Download | History |
 | :--- | :--- | :--- |
-| **DXVK** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
-| **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly&expanded=true) |
-| **VKD3D-Proton** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
-| **FEXCore** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=fex-nightly&expanded=true) |
-| **Box64** (Native) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=box64-nightly&expanded=true) |
-| **WOWBox64** (MinGW) | [**Download Latest**](https://github.com/Xnick417x/Testbuild/releases/latest) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=wowbox64-nightly&expanded=true) |
+| **DXVK** (GPLAsync) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
+| **VKD3D-Proton** (Standard) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly&expanded=true) |
+| **VKD3D-Proton** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
+| **FEXCore** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=fex-nightly&expanded=true) |
+| **Box64** (Native) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=box64-nightly&expanded=true) |
+| **WOWBox64** (MinGW) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=wowbox64-nightly&expanded=true) |
 
 ---
 
