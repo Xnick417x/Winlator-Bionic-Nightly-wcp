@@ -1,4 +1,4 @@
-name: Build DXVK Nightly
+name: Build Dxvk Nightly
 
 on:
   schedule:
