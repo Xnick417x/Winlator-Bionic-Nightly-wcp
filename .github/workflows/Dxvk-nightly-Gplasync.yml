@@ -101,7 +101,10 @@ jobs:
         tag_name: dxvk-nightly-${{ env.COMMIT_HASH }}
         files: '*.wcp'
         name: "DXVK Nightly ${{ env.COMMIT_HASH }}"
-        body: "Automated nightly build of DXVK (GPLAsync) - Commit ${{ env.COMMIT_HASH }}"
+        body: |
+          Automated nightly build of DXVK (GPLAsync).
+          
+          Commit: https://github.com/doitsujin/dxvk/commit/${{ env.COMMIT_HASH }}
 
     - name: Cleanup Old Releases
       if: env.SHOULD_BUILD == 'true'
