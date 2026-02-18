@@ -1,18 +1,41 @@
 name: Build Vk3dk Combined
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "0 17 * * *"
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  # =========================================================
-  # JOB 1: STANDARD (x64/x86)
-  # =========================================================
   build-standard:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout VKD3D
+        uses: actions/checkout@v4
+        with:
+          repository: HansKristian-Work/vkd3d-proton
+          submodules: recursive
+          fetch-depth: 0
+          path: src
+
+      - name: Check for Updates
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+          else
+            cd src
+            if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+              echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+            else
+              echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+            fi
+          fi
+
       - name: Install Dependencies
+        if: env.SHOULD_BUILD == 'true'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
@@ -21,6 +44,7 @@ jobs:
             meson ninja-build zstd
 
       - name: Setup Toolchain (llvm-mingw)
+        if: env.SHOULD_BUILD == 'true'
         run: |
           LLVM_MINGW_TAG="20251104"
           TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -33,27 +57,19 @@ jobs:
           
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-      - name: Checkout VKD3D
-        uses: actions/checkout@v4
-        with:
-          repository: HansKristian-Work/vkd3d-proton
-          submodules: recursive
-          fetch-depth: 0
-          path: src
-
       - name: Generate Version Info
+        if: env.SHOULD_BUILD == 'true'
         run: |
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          # Format: 3.0b-<commit>
           VERSION_NAME="3.0b-${COMMIT_HASH}"
           
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
 
       - name: Build Standard
+        if: env.SHOULD_BUILD == 'true'
         run: |
-          # Standard x64 Crossfile
           cat <<EOF > cross-x64.txt
           [binaries]
           c = '/opt/llvm-mingw/bin/x86_64-w64-mingw32-clang'
@@ -71,7 +87,6 @@ jobs:
           endian = 'little'
           EOF
           
-          # Standard x86 Crossfile
           cat <<EOF > cross-x86.txt
           [binaries]
           c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -97,6 +112,7 @@ jobs:
           ninja -C build-x86
 
       - name: Package Standard
+        if: env.SHOULD_BUILD == 'true'
         run: |
           rm -rf final_package
           mkdir -p final_package/system32
@@ -107,7 +123,6 @@ jobs:
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
           
-          # JSON Description: Vk3dk Standard Nightly <commit>
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -124,23 +139,63 @@ jobs:
           EOF
           
           cd final_package
-          # WCP Name: Vk3dk-Standard-3.0b-<commit>.wcp
           tar -cJf ../Vk3dk-Standard-${{ env.VERSION_NAME }}.wcp *
 
       - name: Upload Artifact (Standard)
+        if: env.SHOULD_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: vk3dk-standard
           path: '*.wcp'
 
+      - name: Create Release (Standard)
+        if: env.SHOULD_BUILD == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: vk3dk-nightly-${{ env.COMMIT_HASH }}
+          files: '*.wcp'
+          name: "Vk3dk Standard Nightly ${{ env.COMMIT_HASH }}"
+          body: |
+            Automated nightly build of Vk3dk (Standard).
+            
+            Commit: https://github.com/HansKristian-Work/vkd3d-proton/commit/${{ env.COMMIT_HASH }}
 
-  # =========================================================
-  # JOB 2: ARM64EC (ARM64EC/x86)
-  # =========================================================
+      - name: Cleanup Old Releases (Standard)
+        if: env.SHOULD_BUILD == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-nightly-"))' \
+          | tail -n +9 \
+          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
+
   build-arm64ec:
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout VKD3D
+        uses: actions/checkout@v4
+        with:
+          repository: HansKristian-Work/vkd3d-proton
+          submodules: recursive
+          fetch-depth: 0
+          path: src
+
+      - name: Check for Updates
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+          else
+            cd src
+            if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+              echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+            else
+              echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+            fi
+          fi
+
       - name: Install Dependencies
+        if: env.SHOULD_BUILD == 'true'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
@@ -148,12 +203,14 @@ jobs:
             zstd meson ninja-build wget unzip build-essential
 
       - name: Setup GLSLang
+        if: env.SHOULD_BUILD == 'true'
         run: |
           wget -q https://github.com/KhronosGroup/glslang/releases/download/master-tot/glslang-master-linux-Release.zip
           unzip -q glslang-master-linux-Release.zip -d glslang
           echo "$PWD/glslang/bin" >> $GITHUB_PATH
 
       - name: Setup Toolchain (llvm-mingw)
+        if: env.SHOULD_BUILD == 'true'
         run: |
           LLVM_MINGW_TAG="20251104"
           TOOLCHAIN_DIR="/opt/llvm-mingw"
@@ -166,27 +223,19 @@ jobs:
           
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-      - name: Checkout VKD3D
-        uses: actions/checkout@v4
-        with:
-          repository: HansKristian-Work/vkd3d-proton
-          submodules: recursive
-          fetch-depth: 0
-          path: src
-
       - name: Generate Version Info
+        if: env.SHOULD_BUILD == 'true'
         run: |
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          # Format: 3.0b-arm64ec-<commit>
           VERSION_NAME="3.0b-arm64ec-${COMMIT_HASH}"
           
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
 
       - name: Build ARM64EC
+        if: env.SHOULD_BUILD == 'true'
         run: |
-          # ARM64EC Crossfile
           cat <<EOF > arm64ec.txt
           [binaries]
           c = 'arm64ec-w64-mingw32-clang'
@@ -203,7 +252,6 @@ jobs:
           endian = 'little'
           EOF
 
-          # x86 Crossfile
           cat <<EOF > x86.txt
           [binaries]
           c = 'i686-w64-mingw32-clang'
@@ -227,6 +275,7 @@ jobs:
           ninja -C build-x86 -j 2
 
       - name: Package ARM64EC
+        if: env.SHOULD_BUILD == 'true'
         run: |
           rm -rf final_package
           mkdir -p final_package/system32
@@ -240,7 +289,6 @@ jobs:
           llvm-strip --strip-all final_package/system32/*.dll
           llvm-strip --strip-all final_package/syswow64/*.dll
 
-          # JSON Description: Vk3dk Arm64ec Nightly <commit>
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -270,17 +318,37 @@ jobs:
           
           cd final_package
           
-          # Special Packaging: Tar with ./ root -> XZ -> Rename to WCP
           tar -cf ../archive.tar .
           
           cd ..
           xz -9 archive.tar
           
-          # WCP Name: Vk3dk-Arm64ec-3.0b-arm64ec-<commit>.wcp
           mv archive.tar.xz Vk3dk-Arm64ec-${{ env.VERSION_NAME }}.wcp
 
       - name: Upload Artifact (ARM64EC)
+        if: env.SHOULD_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: vk3dk-Arm64ec
           path: '*.wcp'
+
+      - name: Create Release (ARM64EC)
+        if: env.SHOULD_BUILD == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: vk3dk-arm64ec-nightly-${{ env.COMMIT_HASH }}
+          files: '*.wcp'
+          name: "Vk3dk Arm64ec Nightly ${{ env.COMMIT_HASH }}"
+          body: |
+            Automated nightly build of Vk3dk (Arm64ec).
+            
+            Commit: https://github.com/HansKristian-Work/vkd3d-proton/commit/${{ env.COMMIT_HASH }}
+
+      - name: Cleanup Old Releases (ARM64EC)
+        if: env.SHOULD_BUILD == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-arm64ec-nightly-"))' \
+          | tail -n +9 \
+          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
