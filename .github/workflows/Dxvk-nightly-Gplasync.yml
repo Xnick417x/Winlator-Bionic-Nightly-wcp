@@ -48,7 +48,7 @@ jobs:
         {
           "type": "DXVK",
           "versionName": "2.7.1-gplasync-${COMMIT_HASH}",
-          "versionCode": ${{ github.run_number }},
+          "versionCode": 0,
           "description": "DXVK Nightly (GPLAsync)\nCommit: ${COMMIT_HASH}",
           "author": "Blank",
           "files": [
