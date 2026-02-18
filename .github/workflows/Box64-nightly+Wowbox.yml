@@ -120,14 +120,24 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/box64-nightly-${{ env.COMMIT_HASH }}/box64-${{ env.FULL_VERSION }}.wcp"
-          sed -i "/\*\*Box64\*\* (Native)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update dashboard for Box64 ${{ env.COMMIT_HASH }}"
-          git pull --rebase origin main
-          git push
+          
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/box64-nightly-${{ env.COMMIT_HASH }}/box64-${{ env.FULL_VERSION }}.wcp"
+          
+          n=0
+          until [ "$n" -ge 5 ]
+          do
+             git fetch origin main
+             git reset --hard origin/main
+             sed -i "/\*\*Box64\*\* (Native)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+             git add README.md
+             git commit -m "Update dashboard for Box64 ${{ env.COMMIT_HASH }}"
+             if git push origin main; then exit 0; fi
+             n=$((n+1))
+             sleep 15
+          done
+          exit 1
 
   build-wowbox64:
     name: Build WOWBox64 (MinGW)
@@ -246,11 +256,21 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/wowbox64-nightly-${{ env.COMMIT_HASH }}/WOWBox64-${{ env.FULL_VERSION }}.wcp"
-          sed -i "/\*\*WOWBox64\*\* (MinGW)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update dashboard for WOWBox64 ${{ env.COMMIT_HASH }}"
-          git pull --rebase origin main
-          git push
+          
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/wowbox64-nightly-${{ env.COMMIT_HASH }}/WOWBox64-${{ env.FULL_VERSION }}.wcp"
+          
+          n=0
+          until [ "$n" -ge 5 ]
+          do
+             git fetch origin main
+             git reset --hard origin/main
+             sed -i "/\*\*WOWBox64\*\* (MinGW)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+             git add README.md
+             git commit -m "Update dashboard for WOWBox64 ${{ env.COMMIT_HASH }}"
+             if git push origin main; then exit 0; fi
+             n=$((n+1))
+             sleep 15
+          done
+          exit 1
