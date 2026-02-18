@@ -1,24 +1,24 @@
-name: Build VKD3D-Proton (ARM64EC Standalone)
+name: Build VKD3D-Proton (ARM64EC)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 17 * * *"
 
 jobs:
-  build-arm64ec:
-    runs-on: ubuntu-latest
+  build-vkd3d-arm64ec:
+    runs-on: ubuntu-24.04
     steps:
-      - name: Install Dependencies
+      - name: Setup Environment & Dependencies
         run: |
-          sudo apt-get update -y
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ca-certificates curl xz-utils jq git glslang-tools \
-            build-essential python3 python3-pip pkg-config \
-            ninja-build zstd
-          
-          python3 -m pip install --upgrade pip
-          python3 -m pip install meson
+            ca-certificates curl xz-utils jq git python3 pkg-config \
+            zstd meson ninja-build wget unzip build-essential
+
+      - name: Setup GLSLang
+        run: |
+          wget -q https://github.com/KhronosGroup/glslang/releases/download/master-tot/glslang-master-linux-Release.zip
+          unzip -q glslang-master-linux-Release.zip -d glslang
+          echo "$PWD/glslang/bin" >> $GITHUB_PATH
 
       - name: Setup Toolchain (llvm-mingw)
         run: |
@@ -33,38 +33,29 @@ jobs:
           
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-      - name: Checkout VKD3D-Proton
-        uses: actions/checkout@v4
-        with:
-          repository: HansKristian-Work/vkd3d-proton
-          submodules: recursive
-          fetch-depth: 0
-          path: src
-
-      - name: Generate Version Info
-        id: version
+      - name: Build VKD3D
         run: |
+          # Start logging
+          exec > >(tee vkd3d_ec_full.log) 2>&1
+          
+          echo "--- BUILD START ---"
+          git clone --recursive https://github.com/HansKristian-Work/vkd3d-proton src
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          VERSION_NAME="3.0b-ARM64EC-${COMMIT_HASH}"
+          VERSION_NAME="arm64ec-3.0b-${COMMIT_HASH}"
+          
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+          cd ..
 
-      - name: Build ARM64EC & x86
-        run: |
           cat <<EOF > arm64ec.txt
           [binaries]
-          c = 'arm64ec-w64-mingw32-gcc'
-          cpp = 'arm64ec-w64-mingw32-g++'
+          c = 'arm64ec-w64-mingw32-clang'
+          cpp = 'arm64ec-w64-mingw32-clang++'
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
           pkg-config = 'pkg-config'
-          
-          [built-in options]
-          c_link_args = ['-static', '-static-libgcc']
-          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
-
           [host_machine]
           system = 'windows'
           cpu_family = 'aarch64'
@@ -74,18 +65,13 @@ jobs:
 
           cat <<EOF > x86.txt
           [binaries]
-          c = 'i686-w64-mingw32-gcc'
-          cpp = 'i686-w64-mingw32-g++'
+          c = 'i686-w64-mingw32-clang'
+          cpp = 'i686-w64-mingw32-clang++'
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
           widl = 'i686-w64-mingw32-widl'
           pkg-config = 'pkg-config'
-          
-          [built-in options]
-          c_link_args = ['-static', '-static-libgcc']
-          cpp_link_args = ['-static', '-static-libgcc', '-static-libstdc++']
-
           [host_machine]
           system = 'windows'
           cpu_family = 'x86'
@@ -94,32 +80,30 @@ jobs:
           EOF
 
           cd src
-          
           meson setup build-ec --cross-file ../arm64ec.txt -Dbuildtype=release -Dstrip=true
-          ninja -C build-ec
-
+          ninja -C build-ec -j 2
           meson setup build-x86 --cross-file ../x86.txt -Dbuildtype=release -Dstrip=true
-          ninja -C build-x86
-
-      - name: Package Artifacts
-        run: |
+          ninja -C build-x86 -j 2
+          
+          cd ..
           rm -rf final_package
           mkdir -p final_package/system32
           mkdir -p final_package/syswow64
-
+          
           find src/build-ec -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-ec -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
-
-          find final_package -name "*.dll" -exec llvm-strip --strip-all {} \;
+          
+          llvm-strip --strip-all final_package/system32/*.dll
+          llvm-strip --strip-all final_package/syswow64/*.dll
 
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
-            "versionName": "${{ env.VERSION_NAME }}",
-            "versionCode": 0,
-            "description": "Vk3dk-Proton ${{ env.VERSION_NAME }} nightly",
+            "versionName": "${VERSION_NAME}",
+            "versionCode": 1,
+            "description": "${COMMIT_HASH}",
             "files": [
               {
                 "source": "system32/d3d12.dll",
@@ -140,17 +124,15 @@ jobs:
             ]
           }
           EOF
-
+          
           cd final_package
-          
-          tar --format=gnu --owner=0 --group=0 --numeric-owner --sort=name -cf ../archive.tar .
-          
+          tar --zstd -cf ../VKD3D-Proton-${VERSION_NAME}.wcp *
           cd ..
-          xz -9 archive.tar
-          mv archive.tar.xz VKD3D-Proton-${{ env.VERSION_NAME }}.wcp
 
-      - name: Upload Artifact
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: vkd3d-arm64ec
-          path: '*.wcp'
+          name: vkd3d-artifacts
+          path: |
+            *.wcp
+            vkd3d_ec_full.log
