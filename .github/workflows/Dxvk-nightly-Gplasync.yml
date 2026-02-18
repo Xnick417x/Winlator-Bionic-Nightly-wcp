@@ -25,14 +25,21 @@ jobs:
     - name: Check for Updates
       id: check
       run: |
-        cd dxvk
-        # Check if there are any commits in the last 26 hours (buffer for run time)
-        if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
-          echo "No new commits in the last 26 hours."
-          echo "SHOULD_BUILD=false" >> $GITHUB_ENV
-        else
-          echo "New commits found. Proceeding with build."
+        # 1. If Manual Trigger (workflow_dispatch), FORCE BUILD
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "Manual trigger detected. Forcing build..."
           echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+        
+        # 2. If Schedule, Check for Commits in last 26 hours
+        else
+          cd dxvk
+          if [ -z "$(git log --since='26 hours ago' --pretty=format:'%H')" ]; then
+            echo "No new commits in the last 26 hours. Skipping build."
+            echo "SHOULD_BUILD=false" >> $GITHUB_ENV
+          else
+            echo "New commits found! Proceeding with build."
+            echo "SHOULD_BUILD=true" >> $GITHUB_ENV
+          fi
         fi
 
     - name: Install Dependencies
