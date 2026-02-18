@@ -125,11 +125,21 @@ jobs:
       if: env.SHOULD_BUILD == 'true'
       run: |
         cd dashboard
-        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/dxvk-nightly-${{ env.COMMIT_HASH }}/dxvk-gplasync-${{ env.COMMIT_HASH }}.wcp"
-        sed -i "/\*\*DXVK\*\* (GPLAsync)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add README.md
-        git commit -m "Update dashboard for DXVK ${{ env.COMMIT_HASH }}"
-        git pull --rebase origin main
-        git push
+        
+        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/dxvk-nightly-${{ env.COMMIT_HASH }}/dxvk-gplasync-${{ env.COMMIT_HASH }}.wcp"
+        
+        n=0
+        until [ "$n" -ge 5 ]
+        do
+           git fetch origin main
+           git reset --hard origin/main
+           sed -i "/\*\*DXVK\*\* (GPLAsync)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+           git add README.md
+           git commit -m "Update dashboard for DXVK ${{ env.COMMIT_HASH }}"
+           if git push origin main; then exit 0; fi
+           n=$((n+1))
+           sleep 15
+        done
+        exit 1
