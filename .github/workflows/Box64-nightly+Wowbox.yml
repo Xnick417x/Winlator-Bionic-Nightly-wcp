@@ -54,7 +54,8 @@ jobs:
       - name: Package
         run: |
           cd build
-          echo '{"type": "Box64", "versionName": "${{ env.FULL_VERSION }}", "versionCode": 0, "description": "Box64-${{ env.FULL_VERSION }}. Author: MaxsTechReview", "files": [{"source": "box64", "target": "${bindir}/box64"}]}' > profile.json
+          # Removed Author reference, kept strictly the dynamic FULL_VERSION
+          echo '{"type": "Box64", "versionName": "${{ env.FULL_VERSION }}", "versionCode": 0, "description": "Box64-${{ env.FULL_VERSION }}", "files": [{"source": "box64", "target": "${bindir}/box64"}]}' > profile.json
           tar -cJf "box64-${{ env.FULL_VERSION }}.wcp" box64 profile.json
 
       - name: Upload Artifact
@@ -114,7 +115,8 @@ jobs:
       - name: Package
         run: |
           cd build/wowbox64-prefix/src/wowbox64-build
-          echo '{"type": "WOWBox64", "versionName": "${{ env.FULL_VERSION }}", "versionCode": 0, "description": "WOWBox64-${{ env.FULL_VERSION }}. Author: MaxsTechReview", "files": [{"source": "system32/wowbox64.dll", "target": "${system32}/wowbox64.dll"}]}' > profile.json
+          # Removed Author reference here as well
+          echo '{"type": "WOWBox64", "versionName": "${{ env.FULL_VERSION }}", "versionCode": 0, "description": "WOWBox64-${{ env.FULL_VERSION }}", "files": [{"source": "system32/wowbox64.dll", "target": "${system32}/wowbox64.dll"}]}' > profile.json
           mkdir -p system32 && cp wowbox64.dll system32/
           tar -cJf "WOWBox64-${{ env.FULL_VERSION }}.wcp" system32 profile.json
 
