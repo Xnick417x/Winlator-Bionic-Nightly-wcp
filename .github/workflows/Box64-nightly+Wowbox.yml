@@ -120,11 +120,8 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
-          
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/box64-nightly-${{ env.COMMIT_HASH }}/box64-${{ env.FULL_VERSION }}.wcp"
-          
-          sed -i "s|\(| \*\*Box64\*\*.*\[.*Download Latest.*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
-          
+          sed -i "/\*\*Box64\*\* (Native)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
@@ -248,11 +245,8 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
-          
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/wowbox64-nightly-${{ env.COMMIT_HASH }}/WOWBox64-${{ env.FULL_VERSION }}.wcp"
-          
-          sed -i "s|\(| \*\*WOWBox64\*\*.*\[.*Download Latest.*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
-          
+          sed -i "/\*\*WOWBox64\*\* (MinGW)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
