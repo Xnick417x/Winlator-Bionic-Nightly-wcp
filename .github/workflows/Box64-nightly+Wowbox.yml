@@ -126,6 +126,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "Update dashboard for Box64 ${{ env.COMMIT_HASH }}"
+          git pull --rebase origin main
           git push
 
   build-wowbox64:
@@ -251,4 +252,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "Update dashboard for WOWBox64 ${{ env.COMMIT_HASH }}"
+          git pull --rebase origin main
           git push
