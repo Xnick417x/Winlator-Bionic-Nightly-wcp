@@ -125,11 +125,8 @@ jobs:
       if: env.SHOULD_BUILD == 'true'
       run: |
         cd dashboard
-        
         DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/dxvk-nightly-${{ env.COMMIT_HASH }}/dxvk-gplasync-${{ env.COMMIT_HASH }}.wcp"
-        
-        sed -i "s|\(| \*\*DXVK\*\*.*\[.*Download Latest.*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
-        
+        sed -i "/\*\*DXVK\*\* (GPLAsync)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add README.md
