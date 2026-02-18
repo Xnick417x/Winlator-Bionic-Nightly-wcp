@@ -48,13 +48,10 @@ jobs:
         run: |
           LLVM_MINGW_TAG="20251104"
           TOOLCHAIN_DIR="/opt/llvm-mingw"
-          
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          
           sudo rm -rf "$TOOLCHAIN_DIR"
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-          
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
       - name: Generate Version Info
@@ -63,7 +60,6 @@ jobs:
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
           VERSION_NAME="3.0b-${COMMIT_HASH}"
-          
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
 
@@ -86,7 +82,6 @@ jobs:
           cpu = 'x86_64'
           endian = 'little'
           EOF
-          
           cat <<EOF > cross-x86.txt
           [binaries]
           c = '/opt/llvm-mingw/bin/i686-w64-mingw32-clang'
@@ -103,11 +98,9 @@ jobs:
           cpu = 'i686'
           endian = 'little'
           EOF
-          
           cd src
           meson setup build-x64 --cross-file ../cross-x64.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x64
-          
           meson setup build-x86 --cross-file ../cross-x86.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-x86
 
@@ -115,14 +108,11 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           rm -rf final_package
-          mkdir -p final_package/system32
-          mkdir -p final_package/syswow64
-          
+          mkdir -p final_package/system32 final_package/syswow64
           find src/build-x64 -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x64 -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
-          
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -137,16 +127,8 @@ jobs:
             ]
           }
           EOF
-          
           cd final_package
           tar -cJf ../Vk3dk-Standard-${{ env.VERSION_NAME }}.wcp *
-
-      - name: Upload Artifact (Standard)
-        if: env.SHOULD_BUILD == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: vk3dk-standard
-          path: '*.wcp'
 
       - name: Create Release (Standard)
         if: env.SHOULD_BUILD == 'true'
@@ -157,7 +139,6 @@ jobs:
           name: "Vk3dk Standard Nightly ${{ env.COMMIT_HASH }}"
           body: |
             Automated nightly build of Vk3dk (Standard).
-            
             Commit: https://github.com/HansKristian-Work/vkd3d-proton/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases (Standard)
@@ -165,9 +146,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-nightly-"))' \
-          | tail -n +9 \
-          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-nightly-"))' | tail -n +9 | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
 
       - name: Update Dashboard (Standard)
         if: env.SHOULD_BUILD == 'true'
@@ -179,11 +158,8 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
-          
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/vk3dk-nightly-${{ env.COMMIT_HASH }}/Vk3dk-Standard-${{ env.VERSION_NAME }}.wcp"
-          
-          sed -i "s|\(| \*\*VKD3D-Proton\*\* | \`Standard\`.*\[\*\*Download Latest\*\*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
-          
+          sed -i "/\*\*VKD3D-Proton\*\* (Standard)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
@@ -235,13 +211,10 @@ jobs:
         run: |
           LLVM_MINGW_TAG="20251104"
           TOOLCHAIN_DIR="/opt/llvm-mingw"
-          
           wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TAG/llvm-mingw-$LLVM_MINGW_TAG-ucrt-ubuntu-22.04-x86_64.tar.xz" -O llvm.tar.xz
-          
           sudo rm -rf "$TOOLCHAIN_DIR"
           sudo mkdir -p "$TOOLCHAIN_DIR"
           sudo tar -C "$TOOLCHAIN_DIR" --strip-components=1 -xJf llvm.tar.xz
-          
           echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
       - name: Generate Version Info
@@ -250,7 +223,6 @@ jobs:
           cd src
           COMMIT_HASH=$(git rev-parse --short HEAD)
           VERSION_NAME="3.0b-arm64ec-${COMMIT_HASH}"
-          
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
 
@@ -272,7 +244,6 @@ jobs:
           cpu = 'aarch64'
           endian = 'little'
           EOF
-
           cat <<EOF > x86.txt
           [binaries]
           c = 'i686-w64-mingw32-clang'
@@ -280,7 +251,7 @@ jobs:
           ar = 'llvm-ar'
           strip = 'llvm-strip'
           windres = 'i686-w64-mingw32-windres'
-          widl = 'i686-w64-mingw32-widl'
+          widl = 'i686-w64-mingw32-windres'
           pkg-config = 'pkg-config'
           [host_machine]
           system = 'windows'
@@ -288,7 +259,6 @@ jobs:
           cpu = 'i686'
           endian = 'little'
           EOF
-
           cd src
           meson setup build-ec --cross-file ../arm64ec.txt -Dbuildtype=release -Dstrip=true
           ninja -C build-ec -j 2
@@ -299,17 +269,13 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           rm -rf final_package
-          mkdir -p final_package/system32
-          mkdir -p final_package/syswow64
-          
+          mkdir -p final_package/system32 final_package/syswow64
           find src/build-ec -name "d3d12.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-ec -name "d3d12core.dll" -exec cp -L {} final_package/system32/ \;
           find src/build-x86 -name "d3d12.dll" -exec cp -L {} final_package/syswow64/ \;
           find src/build-x86 -name "d3d12core.dll" -exec cp -L {} final_package/syswow64/ \;
-          
           llvm-strip --strip-all final_package/system32/*.dll
           llvm-strip --strip-all final_package/syswow64/*.dll
-
           cat <<EOF > final_package/profile.json
           {
             "type": "VKD3D",
@@ -317,41 +283,18 @@ jobs:
             "versionCode": 1,
             "description": "Vk3dk Arm64ec Nightly ${{ env.COMMIT_HASH }}",
             "files": [
-              {
-                "source": "system32/d3d12.dll",
-                "target": "\${system32}/d3d12.dll"
-              },
-              {
-                "source": "system32/d3d12core.dll",
-                "target": "\${system32}/d3d12core.dll"
-              },
-              {
-                "source": "syswow64/d3d12.dll",
-                "target": "\${syswow64}/d3d12.dll"
-              },
-              {
-                "source": "syswow64/d3d12core.dll",
-                "target": "\${syswow64}/d3d12core.dll"
-              }
+              {"source": "system32/d3d12.dll", "target": "\${system32}/d3d12.dll"},
+              {"source": "system32/d3d12core.dll", "target": "\${system32}/d3d12core.dll"},
+              {"source": "syswow64/d3d12.dll", "target": "\${syswow64}/d3d12.dll"},
+              {"source": "syswow64/d3d12core.dll", "target": "\${syswow64}/d3d12core.dll"}
             ]
           }
           EOF
-          
           cd final_package
-          
           tar -cf ../archive.tar .
-          
           cd ..
           xz -9 archive.tar
-          
           mv archive.tar.xz Vk3dk-Arm64ec-${{ env.VERSION_NAME }}.wcp
-
-      - name: Upload Artifact (ARM64EC)
-        if: env.SHOULD_BUILD == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: vk3dk-Arm64ec
-          path: '*.wcp'
 
       - name: Create Release (ARM64EC)
         if: env.SHOULD_BUILD == 'true'
@@ -362,7 +305,6 @@ jobs:
           name: "Vk3dk Arm64ec Nightly ${{ env.COMMIT_HASH }}"
           body: |
             Automated nightly build of Vk3dk (Arm64ec).
-            
             Commit: https://github.com/HansKristian-Work/vkd3d-proton/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases (ARM64EC)
@@ -370,9 +312,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-arm64ec-nightly-"))' \
-          | tail -n +9 \
-          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("vk3dk-arm64ec-nightly-"))' | tail -n +9 | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
 
       - name: Update Dashboard (ARM64EC)
         if: env.SHOULD_BUILD == 'true'
@@ -384,11 +324,8 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dashboard
-          
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/vk3dk-arm64ec-nightly-${{ env.COMMIT_HASH }}/Vk3dk-Arm64ec-${{ env.VERSION_NAME }}.wcp"
-          
-          sed -i "s|\(| \*\*VKD3D-Proton\*\* | \`ARM64EC\`.*\[\*\*Download Latest\*\*\]\)([^)]*)|\1($DOWNLOAD_URL)|" README.md
-          
+          sed -i "/\*\*VKD3D-Proton\*\* (ARM64EC)/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
