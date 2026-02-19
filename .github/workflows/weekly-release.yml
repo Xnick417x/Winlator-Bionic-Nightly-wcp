@@ -62,11 +62,12 @@ jobs:
 
       - name: Update Dashboard (Weekly)
         run: |
-          cd dashboard
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Removed "cd dashboard" line to fix the error
           
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/Weekly-${{ env.WEEKLY_DATE }}/Weekly-${{ env.WEEKLY_DATE }}.zip"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           n=0
           until [ "$n" -ge 5 ]
