@@ -31,7 +31,7 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 | **VKD3D-Proton** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
 | **FEXCore** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=fex-nightly&expanded=true) |
 | **Box64** (Native) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=box64-nightly+NOT+wowbox64+NOT+bionic&expanded=true) |
-| **Box64** (Bionic) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/bionic-box64-nightly-857991c50/bionic-box64-0.4.1-857991c50-bionic.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=bionic-box64-nightly&expanded=true) |
+| **Box64** (Bionic) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=bionic-box64-nightly&expanded=true) |
 | **WOWBox64** (MinGW) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=wowbox64-nightly&expanded=true) |
 
 ---
@@ -43,6 +43,18 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 4. Select the downloaded file to install.
 
 ---
+
+### Credits
+
+Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX, etc.) retain their original upstream licenses. WCP packages redistribute unmodified (or minimally patched) binaries, and all copyrights and credits belong to the original authors.
+
+* FEX [**FEX-Emu**](https://github.com/FEX-Emu)
+* Box64 [**ptitSeb**](https://github.com/ptitSeb)
+* DXVK [**Philip Rebohle**](https://github.com/doitsujin)
+* DXVK-Sarek [**pythonlover02**](https://github.com/pythonlover02)
+* DXVK-GPLAsync Patch [**Ph42oN**](https://gitlab.com/Ph42oN)
+* VKD3D [**Hans-Kristian Arntzen**](https://github.com/HansKristian-Work)
+* Freedreno Turnip driver [**Mesa**](https://gitlab.freedesktop.org/mesa/mesa)
 
 <div align="center">
 Maintained by Xnick417x
