@@ -1,0 +1,91 @@
+name: Build Weekly Bundle
+
+on:
+  schedule:
+    - cron: '0 4 * * 5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle-weekly:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Latest Nightlies
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir weekly_assets
+          cd weekly_assets
+          
+          download_latest() {
+            PREFIX=$1
+            TAG=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName --jq ".[] | select(.tagName | startswith(\"$PREFIX\")) | .tagName" | head -n 1)
+            
+            if [ -n "$TAG" ]; then
+              gh release download "$TAG" --repo ${{ github.repository }} --pattern "*.wcp" || true
+            fi
+          }
+
+          download_latest "dxvk-nightly-"
+          download_latest "vk3dk-nightly-"
+          download_latest "vk3dk-arm64ec-nightly-"
+          download_latest "fex-nightly-"
+          download_latest "box64-nightly-"
+          download_latest "wowbox64-nightly-"
+
+      - name: Create Zip Bundle
+        run: |
+          DATE=$(date +'%Y-%m-%d')
+          echo "WEEKLY_DATE=$DATE" >> $GITHUB_ENV
+          zip -j "Weekly-$DATE.zip" weekly_assets/*.wcp
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: Weekly-${{ env.WEEKLY_DATE }}
+          name: "Weekly Bundle ${{ env.WEEKLY_DATE }}"
+          files: "Weekly-${{ env.WEEKLY_DATE }}.zip"
+          body: |
+            **Automated Weekly Bundle**
+            Contains the latest available nightly builds as of ${{ env.WEEKLY_DATE }}.
+            
+            **Contents:**
+            * DXVK (GPLAsync)
+            * VKD3D-Proton (Standard & ARM64EC)
+            * FEXCore
+            * Box64 & WOWBox64
+
+      - name: Cleanup Old Weekly Releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("Weekly-"))' \
+          | tail -n +3 \
+          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
+
+      - name: Update Dashboard (Weekly)
+        run: |
+          cd dashboard
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/Weekly-${{ env.WEEKLY_DATE }}/Weekly-${{ env.WEEKLY_DATE }}.zip"
+          
+          n=0
+          until [ "$n" -ge 5 ]
+          do
+             git fetch origin main
+             git reset --hard origin/main
+             sed -i "/\*\*Weekly Bundle\*\*/ s|\[\*\*Download Latest\*\*\]([^)]*)|[**Download Latest**]($DOWNLOAD_URL)|" README.md
+             git add README.md
+             git commit -m "Update dashboard for Weekly Bundle ${{ env.WEEKLY_DATE }}"
+             if git push origin main; then exit 0; fi
+             n=$((n+1))
+             sleep 15
+          done
+          exit 1
