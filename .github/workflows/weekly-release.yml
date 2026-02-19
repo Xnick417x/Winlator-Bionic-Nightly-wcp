@@ -60,14 +60,6 @@ jobs:
             * FEXCore
             * Box64 & WOWBox64
 
-      - name: Cleanup Old Weekly Releases
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release list --limit 100 --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName | select(startswith("Weekly-"))' \
-          | tail -n +3 \
-          | xargs -I {} sh -c 'gh release delete "{}" --cleanup-tag -y'
-
       - name: Update Dashboard (Weekly)
         run: |
           cd dashboard
