@@ -12,10 +12,11 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 ---
 
 ### Status
-* **DXVK:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Dxvk-nightly-Gplasync.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Dxvk-nightly-Gplasync.yml)
+* **DXVK:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Dxvk-Combined.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Dxvk-Combined.yml)
 * **VKD3D:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Vk3dk-nightly+arm.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Vk3dk-nightly+arm.yml)
 * **FEXCore:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/FexCore-nightly.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/FexCore-nightly.yml)
 * **Box64/WOW:** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Box64-nightly+Wowbox.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Box64-nightly+Wowbox.yml)
+* **Box64 (Bionic):** [![Build Status](https://img.shields.io/github/actions/workflow/status/Xnick417x/Testbuild/Box64-bionic.yml?label=Build&style=flat-square)](https://github.com/Xnick417x/Testbuild/actions/workflows/Box64-bionic.yml)
 
 ---
 
@@ -29,7 +30,8 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 | **VKD3D-Proton** (Standard) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly+NOT+arm64ec&expanded=true) |
 | **VKD3D-Proton** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
 | **FEXCore** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=fex-nightly&expanded=true) |
-| **Box64** (Native) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=box64-nightly+NOT+wowbox64&expanded=true) |
+| **Box64** (Native) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=box64-nightly+NOT+wowbox64+NOT+bionic&expanded=true) |
+| **Box64** (Bionic) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=bionic-box64-nightly&expanded=true) |
 | **WOWBox64** (MinGW) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=wowbox64-nightly&expanded=true) |
 
 ---
