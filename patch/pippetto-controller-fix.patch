@@ -1,0 +1,323 @@
+From 9a9dba14412e2a1118f3adfba50e03282ba02de8 Mon Sep 17 00:00:00 2001
+From: Pipetto-crypto <Pipetto-crypto@pipetto-crypto.com>
+Date: Sun, 9 Mar 2025 08:19:57 +0100
+Subject: [PATCH 1/7] [WRAPPED] Add libandroid-spawn as a wrapped lib
+
+---
+ CMakeLists.txt                            |  1 +
+ src/library_list.h                        |  1 +
+ src/wrapped/wrappedandroidspawn.c         | 19 +++++++++++++++++++
+ src/wrapped/wrappedandroidspawn_private.h |  3 +++
+ 4 files changed, 24 insertions(+)
+ create mode 100644 src/wrapped/wrappedandroidspawn.c
+ create mode 100644 src/wrapped/wrappedandroidspawn_private.h
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a5fd235816..da6faef8e4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -759,6 +759,7 @@ endif()
+ if(ANDROID)
+     list(APPEND WRAPPEDS
+         "${BOX64_ROOT}/src/wrapped/wrappedandroidshmem.c"
++        "${BOX64_ROOT}/src/wrapped/wrappedandroidspawn.c"
+     )
+ endif()
+ if(TERMUX)
+diff --git a/src/library_list.h b/src/library_list.h
+index 44d865e945..9efd0691d8 100644
+--- a/src/library_list.h
++++ b/src/library_list.h
+@@ -375,6 +375,7 @@ GO("libgdk-x11-2.0.so", gdkx112)
+ GO("libpangocairo-1.0.so", pangocairo)
+ #ifdef ANDROID
+ GO("libandroid-shmem.so", androidshmem)
++GO("libandroid-spawn.so", androidspawn)
+ #endif
+ 
+ GO("libc.so.6", libc)
+diff --git a/src/wrapped/wrappedandroidspawn.c b/src/wrapped/wrappedandroidspawn.c
+new file mode 100644
+index 0000000000..4018c9de14
+--- /dev/null
++++ b/src/wrapped/wrappedandroidspawn.c
+@@ -0,0 +1,19 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#define _GNU_SOURCE   /* See feature_test_macros(7) */
++#include <dlfcn.h>
++
++#include "wrappedlibs.h"
++
++#include "debug.h"
++#include "wrapper.h"
++#include "bridge.h"
++#include "librarian/library_private.h"
++#include "x64emu.h"
++
++const char* androidspawnName = "libandroid-spawn.so";
++
++#define LIBNAME androidspawn
++
++#include "wrappedlib_init.h"
+diff --git a/src/wrapped/wrappedandroidspawn_private.h b/src/wrapped/wrappedandroidspawn_private.h
+new file mode 100644
+index 0000000000..649a3ed36d
+--- /dev/null
++++ b/src/wrapped/wrappedandroidspawn_private.h
+@@ -0,0 +1,3 @@
++#if !(defined(GO) && defined(GOM) && defined(GO2) && defined(DATA))
++#error Meh...
++#endif
+
+From 145d825e8b899924bd1f43609bb6c67fac12ff53 Mon Sep 17 00:00:00 2001
+From: Pipetto-crypto <Pipetto-crypto@pipetto-crypto.com>
+Date: Sun, 9 Mar 2025 12:32:21 +0100
+Subject: [PATCH 2/7] [WRAPPED] Fix wrapped libgcrypt and libgmp for Android
+
+---
+ src/library_list.h          | 2 ++
+ src/wrapped/wrappedgcrypt.c | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/src/library_list.h b/src/library_list.h
+index 9efd0691d8..b815775acc 100644
+--- a/src/library_list.h
++++ b/src/library_list.h
+@@ -120,6 +120,7 @@ GO("libcrypto.so.3", crypto3)
+ GO("libssl.so.3", libssl3)
+ GO("libcrypt.so.1", libcrypt)
+ GO("libgcrypt.so.20", gcrypt)
++GO("libgcrypt.so", gcrypt)
+ GO("libutil.so.1", util)
+ GO("libuuid.so.1", libuuid)
+ GO("libresolv.so.2", libresolv)
+@@ -211,6 +212,7 @@ GO("libselinux.so.1", selinux)
+ GO("libsecret-1.so.0", secret1)
+ GO("libpci.so.3", libpci)
+ GO("libgmp.so.10", gmp)
++GO("libgmp.so", gmp)
+ GO("libFAudio.so.0", faudio)
+ GO("libgstallocators-1.0.so.0", gstallocators)
+ GO("libgstapp-1.0.so.0", gstapp)
+diff --git a/src/wrapped/wrappedgcrypt.c b/src/wrapped/wrappedgcrypt.c
+index 827e3924a9..23206a8c74 100644
+--- a/src/wrapped/wrappedgcrypt.c
++++ b/src/wrapped/wrappedgcrypt.c
+@@ -19,6 +19,7 @@
+ #include "myalign.h"
+ 
+ const char* gcryptName = "libgcrypt.so.20";
++#define ALTNAME "libgcrypt.so"
+ #define LIBNAME gcrypt
+ 
+ typedef uint32_t  (*uFpppp_t)(void*, void*, void*, void*);
+
+From cd62059f970a592b6ad0dd1bb233c73adbb576e2 Mon Sep 17 00:00:00 2001
+From: Pipetto-Crypto <pipetto-crypto@gmail.com>
+Date: Sun, 1 Jun 2025 11:42:46 +0200
+Subject: [PATCH 3/7] Add libandroid as a wrapped library
+
+---
+ CMakeLists.txt                       |  1 +
+ src/emu/x64printer.c                 |  2 ++
+ src/library_list.h                   |  1 +
+ src/wrapped/wrappedandroid.c         | 19 +++++++++++++++++++
+ src/wrapped/wrappedandroid_private.h |  6 ++++++
+ 5 files changed, 29 insertions(+)
+ create mode 100644 src/wrapped/wrappedandroid.c
+ create mode 100644 src/wrapped/wrappedandroid_private.h
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f22466510d..2f703f59d8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -765,6 +765,7 @@ if(ANDROID)
+     list(APPEND WRAPPEDS
+         "${BOX64_ROOT}/src/wrapped/wrappedandroidshmem.c"
+         "${BOX64_ROOT}/src/wrapped/wrappedandroidspawn.c"
++        "${BOX64_ROOT}/src/wrapped/wrappedandroid.c"
+     )
+ endif()
+ if(TERMUX)
+diff --git a/src/emu/x64printer.c b/src/emu/x64printer.c
+index 30195ee9bc..541c89df7a 100644
+--- a/src/emu/x64printer.c
++++ b/src/emu/x64printer.c
+@@ -1979,6 +1979,8 @@ void x64Print(x64emu_t* emu, char* buff, size_t buffsz, const char* func, int ti
+         snprintf(buff, buffsz, "%04d|%p: Calling %s(%" PRIu32 ", %" PRIp ", %" PRIp ", %" PRIu32 ")", tid, *(void**)(R_RSP), func, (uint32_t)R_RDI, (void*)R_RSI, (void*)R_RDX, (uint32_t)R_RCX);
+     } else if (w == iFuppp) {
+         snprintf(buff, buffsz, "%04d|%p: Calling %s(%" PRIu32 ", %" PRIp ", %" PRIp ", %" PRIp ")", tid, *(void**)(R_RSP), func, (uint32_t)R_RDI, (void*)R_RSI, (void*)R_RDX, (void*)R_RCX);
++    } else if (w == iFLpLi) {
++        snprintf(buff, buffsz, "%04d|%p: Calling %s(%" PRIu64 ", %" PRIp ", %" PRIu64 ", %" PRIi32 ")", tid, *(void**)(R_RSP), func, (uintptr_t)R_RDI, (void*)R_RSI, (uintptr_t)R_RDX, (int32_t)R_RCX);
+     } else if (w == iFLpLp) {
+         snprintf(buff, buffsz, "%04d|%p: Calling %s(%" PRIu64 ", %" PRIp ", %" PRIu64 ", %" PRIp ")", tid, *(void**)(R_RSP), func, (uintptr_t)R_RDI, (void*)R_RSI, (uintptr_t)R_RDX, (void*)R_RCX);
+     } else if (w == iFLppp) {
+diff --git a/src/library_list.h b/src/library_list.h
+index 418f634155..0b1afcf59e 100644
+--- a/src/library_list.h
++++ b/src/library_list.h
+@@ -379,6 +379,7 @@ GO("libpangocairo-1.0.so", pangocairo)
+ #ifdef ANDROID
+ GO("libandroid-shmem.so", androidshmem)
+ GO("libandroid-spawn.so", androidspawn)
++GO("libandroid.so", android)
+ #endif
+ 
+ GO("libc.so.6", libc)
+diff --git a/src/wrapped/wrappedandroid.c b/src/wrapped/wrappedandroid.c
+new file mode 100644
+index 0000000000..91a4d20266
+--- /dev/null
++++ b/src/wrapped/wrappedandroid.c
+@@ -0,0 +1,19 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#define _GNU_SOURCE   /* See feature_test_macros(7) */
++#include <dlfcn.h>
++
++#include "wrappedlibs.h"
++
++#include "debug.h"
++#include "wrapper.h"
++#include "bridge.h"
++#include "librarian/library_private.h"
++#include "x64emu.h"
++
++const char* androidName = "libandroid.so";
++
++#define LIBNAME android
++
++#include "wrappedlib_init.h"
+diff --git a/src/wrapped/wrappedandroid_private.h b/src/wrapped/wrappedandroid_private.h
+new file mode 100644
+index 0000000000..45ea7f3975
+--- /dev/null
++++ b/src/wrapped/wrappedandroid_private.h
+@@ -0,0 +1,6 @@
++#if !(defined(GO) && defined(GOM) && defined(GO2) && defined(DATA))
++#error Meh...
++#endif
++
++GO(android_res_nsend, iFLpLi)
++GO(android_res_nresult, iFippL)
+
+From 33d4340e01358ca80fc09af1240400ea1c120142 Mon Sep 17 00:00:00 2001
+From: Pipetto-Crypto <pipetto-crypto@gmail.com>
+Date: Sun, 1 Jun 2025 11:44:03 +0200
+Subject: [PATCH 4/7] Wrap res_mkquery symbol inside libc
+
+---
+ src/wrapped/wrappedlibc_private.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/wrapped/wrappedlibc_private.h b/src/wrapped/wrappedlibc_private.h
+index 7eb85b65f4..95156f94e4 100644
+--- a/src/wrapped/wrappedlibc_private.h
++++ b/src/wrapped/wrappedlibc_private.h
+@@ -2669,11 +2669,13 @@ GOWM(_ITM_memcpyRnWt, vFppL)  //%noE
+ GOM(__libc_init, vFEpppp)
+ GO(__errno, pFv)
+ GO(android_set_abort_message, vFp)
++GOW(res_mkquery, iFipiipippi)
+ #else
+ // Those symbols don't exist in non-Android builds
+ //GOM(__libc_init, 
+ //GO(__errno, 
+ //GO(android_set_abort_message, vFp)
++//GO(res_mkquery, iFipiipippi)
+ #endif
+ #ifdef STATICBUILD
+ GO(dummy_pFLp, pFLp)
+
+From aab0ad16cb16285e4acefcc198193aeb6153752a Mon Sep 17 00:00:00 2001
+From: Pipetto-Crypto <pipetto-crypto@gmail.com>
+Date: Wed, 25 Jun 2025 10:50:48 +0200
+Subject: [PATCH 5/7] [WRAPPED] Wrap android_res_nquery
+
+---
+ src/wrapped/wrappedandroid_private.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/wrapped/wrappedandroid_private.h b/src/wrapped/wrappedandroid_private.h
+index 45ea7f3975..d1d86c98b8 100644
+--- a/src/wrapped/wrappedandroid_private.h
++++ b/src/wrapped/wrappedandroid_private.h
+@@ -3,4 +3,5 @@
+ #endif
+ 
+ GO(android_res_nsend, iFLpLi)
++GO(android_res_nquery, iFLpiii)
+ GO(android_res_nresult, iFippL)
+
+From 1517ae125e90bf289ece96280c0bf32f2e24da55 Mon Sep 17 00:00:00 2001
+From: Pipetto-Crypto <pipetto-crypto@gmail.com>
+Date: Wed, 25 Jun 2025 10:51:38 +0200
+Subject: [PATCH 6/7] [WRAPPED][ANDROID] Wrap more libresolv symbols for
+ Android
+
+---
+ src/wrapped/wrappedlibc_private.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/wrapped/wrappedlibc_private.h b/src/wrapped/wrappedlibc_private.h
+index 760298a425..16e40ce1fc 100644
+--- a/src/wrapped/wrappedlibc_private.h
++++ b/src/wrapped/wrappedlibc_private.h
+@@ -2669,13 +2669,17 @@ GOWM(_ITM_memcpyRnWt, vFppL)  //%noE
+ GOM(__libc_init, vFEpppp)
+ GO(__errno, pFv)
+ GO(android_set_abort_message, vFp)
+-GOW(res_mkquery, iFipiipippi)
++GO(res_mkquery, iFipiipippi)
++GO(ns_parserr, iFpuip)
++GO(ns_initparse, iFpip)
+ #else
+ // Those symbols don't exist in non-Android builds
+ //GOM(__libc_init, 
+ //GO(__errno, 
+ //GO(android_set_abort_message, vFp)
+ //GO(res_mkquery, iFipiipippi)
++//GO(ns_parserr, iFpuip)
++//GO(ns_initparse, iFpip)
+ #endif
+ #ifdef STATICBUILD
+ GO(dummy_pFLp, pFLp)
+
+From 5ec528a66c0c8eb9c028c69064aff3ff57e26b8f Mon Sep 17 00:00:00 2001
+From: Pipetto-Crypto <pipetto-crypto@gmail.com>
+Date: Mon, 21 Jul 2025 14:11:14 +0200
+Subject: [PATCH 7/7] [ANDROID] Define libSDL2 Android libname
+
+---
+ src/library_list.h        | 1 +
+ src/wrapped/wrappedsdl2.c | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/src/library_list.h b/src/library_list.h
+index 0b1afcf59e..a657b6750e 100644
+--- a/src/library_list.h
++++ b/src/library_list.h
+@@ -20,6 +20,7 @@ GO("libX11.so.6", libx11)
+ GO("libasound.so.2", libasound)
+ GO("libasound.so", libasound)
+ GO("libSDL2-2.0.so.0", sdl2)
++GO("libSDL2-2.0.so", sdl2)
+ GO("libSDL2-2.0.so.1", sdl2)
+ GO("libSDL2.so", sdl2)
+ GO("libsdl2-2.0.so.0", sdl2)
+diff --git a/src/wrapped/wrappedsdl2.c b/src/wrapped/wrappedsdl2.c
+index 483bb51e09..5cd0635ef3 100644
+--- a/src/wrapped/wrappedsdl2.c
++++ b/src/wrapped/wrappedsdl2.c
+@@ -23,6 +23,8 @@
+ #include "generated/wrappedsdl2defs.h"
+ 
+ const char* sdl2Name = "libSDL2-2.0.so.0";
++#define ALTNAME "libSDL2-2.0.so"
++
+ #define LIBNAME sdl2
+ static void* my_glhandle = NULL;
+ // DL functions from wrappedlibdl.c

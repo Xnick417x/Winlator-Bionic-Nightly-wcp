@@ -59,6 +59,13 @@ jobs:
           echo "FULL_VERSION=${VERSION}-${COMMIT}-bionic" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
+      - name: Apply Local Controller Fix Patch
+        if: env.SHOULD_BUILD == 'true'
+        run: |
+          cd source
+          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/Patch/patch/pippetto-controller-fix.patch" -O my-patch.patch
+          git apply my-patch.patch || true
+
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
         run: |

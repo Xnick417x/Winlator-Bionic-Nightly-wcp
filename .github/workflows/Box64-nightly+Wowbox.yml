@@ -61,26 +61,12 @@ jobs:
           echo "FULL_VERSION=${VERSION}-${COMMIT}-nightly" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
-      - name: Fetch and Apply Pipetto Controller Fixes
+      - name: Apply Local Controller Fix Patch
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd source
-          git remote add pipetto https://github.com/Pipetto-crypto/box64.git
-          git fetch pipetto
-          PIPETTO_BRANCH=$(git remote show pipetto | awk '/HEAD branch/ {print $NF}')
-          [[ -z "$PIPETTO_BRANCH" ]] && PIPETTO_BRANCH="master"
-          MERGE_BASE=$(git merge-base HEAD pipetto/$PIPETTO_BRANCH)
-          PATCH_COUNT=$(git rev-list --count $MERGE_BASE..pipetto/$PIPETTO_BRANCH)
-          if [ "$PATCH_COUNT" -gt 0 ]; then
-            mkdir -p ../patches
-            git format-patch $MERGE_BASE..pipetto/$PIPETTO_BRANCH -o ../patches/
-            git config --global user.email "bot@github.com"
-            git config --global user.name "bot"
-            git am --3way ../patches/*.patch || {
-              git am --abort
-              git apply --3way ../patches/*.patch || true
-            }
-          fi
+          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/Patch/patch/pippetto-controller-fix.patch" -O my-patch.patch
+          git apply my-patch.patch || true
 
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
@@ -218,26 +204,12 @@ jobs:
           echo "FULL_VERSION=${VERSION}-${COMMIT}-nightly" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT}" >> $GITHUB_ENV
 
-      - name: Fetch and Apply Pipetto Controller Fixes
+      - name: Apply Local Controller Fix Patch
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd source
-          git remote add pipetto https://github.com/Pipetto-crypto/box64.git
-          git fetch pipetto
-          PIPETTO_BRANCH=$(git remote show pipetto | awk '/HEAD branch/ {print $NF}')
-          [[ -z "$PIPETTO_BRANCH" ]] && PIPETTO_BRANCH="master"
-          MERGE_BASE=$(git merge-base HEAD pipetto/$PIPETTO_BRANCH)
-          PATCH_COUNT=$(git rev-list --count $MERGE_BASE..pipetto/$PIPETTO_BRANCH)
-          if [ "$PATCH_COUNT" -gt 0 ]; then
-            mkdir -p ../patches
-            git format-patch $MERGE_BASE..pipetto/$PIPETTO_BRANCH -o ../patches/
-            git config --global user.email "bot@github.com"
-            git config --global user.name "bot"
-            git am --3way ../patches/*.patch || {
-              git am --abort
-              git apply --3way ../patches/*.patch || true
-            }
-          fi
+          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/Patch/patch/pippetto-controller-fix.patch" -O my-patch.patch
+          git apply my-patch.patch || true
 
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
