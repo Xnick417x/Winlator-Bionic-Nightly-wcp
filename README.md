@@ -23,7 +23,7 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 | Component | Download | History |
 | :--- | :--- | :--- |
-| **Weekly Bundle** (All-in-One) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=Weekly&expanded=true) |
+| **Weekly Bundle** (All-in-One) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Weekly-2026-02-19/Weekly-2026-02-19.zip) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=Weekly&expanded=true) |
 | **DXVK** (GPLAsync) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=dxvk-nightly&expanded=true) |
 | **VKD3D-Proton** (Standard) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-nightly+NOT+arm64ec&expanded=true) |
 | **VKD3D-Proton** (ARM64EC) | [**Download Latest**](#) | [View History](https://github.com/Xnick417x/Testbuild/releases?q=vk3dk-arm64ec-nightly&expanded=true) |
