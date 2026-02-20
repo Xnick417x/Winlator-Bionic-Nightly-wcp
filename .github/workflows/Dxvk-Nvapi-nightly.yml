@@ -3,7 +3,7 @@ name: Build DXVK+NVAPI Combined
 on:
   push:
     branches:
-      - your-branch-name-here
+      - Na
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
