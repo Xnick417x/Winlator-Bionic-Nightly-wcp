@@ -57,33 +57,51 @@ jobs:
               result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
               return result.stdout.strip()
 
+          tags_json = run_gh("gh release list --limit 100 --json tagName")
+          all_tags = []
+          if tags_json:
+              try:
+                  all_tags = [t.get("tagName") for t in json.loads(tags_json)]
+              except:
+                  pass
+
           for w_type, prefix in nightly_targets:
-              tag = run_gh(f"gh release list --limit 100 --json tagName --jq \".[] | select(.tagName | startswith(\\\"{prefix}\\\")) | .tagName\" | head -n 1")
+              tag = next((t for t in all_tags if t.startswith(prefix)), None)
               if tag:
                   assets_json = run_gh(f"gh release view {tag} --json assets")
                   if assets_json:
-                      assets = json.loads(assets_json).get("assets", [])
-                      for asset in assets:
-                          if asset["name"].endswith(".wcp"):
-                              pack_data.append({
-                                  "type": w_type,
-                                  "verName": f"Nightly - {asset[\"name\"].replace(\".wcp\", \"\")}",
-                                  "verCode": "0",
-                                  "remoteUrl": asset["url"]
-                              })
+                      try:
+                          assets = json.loads(assets_json).get("assets", [])
+                          for asset in assets:
+                              asset_name = asset.get("name", "")
+                              if asset_name.endswith(".wcp"):
+                                  clean_name = asset_name.replace(".wcp", "")
+                                  pack_data.append({
+                                      "type": w_type,
+                                      "verName": "Nightly - " + clean_name,
+                                      "verCode": "0",
+                                      "remoteUrl": asset.get("url", "")
+                                  })
+                      except:
+                          pass
 
           for w_type, tag in stable_targets:
               assets_json = run_gh(f"gh release view {tag} --json assets 2>/dev/null")
               if assets_json:
-                  assets = json.loads(assets_json).get("assets", [])
-                  for asset in assets:
-                          if asset["name"].endswith(".wcp"):
+                  try:
+                      assets = json.loads(assets_json).get("assets", [])
+                      for asset in assets:
+                          asset_name = asset.get("name", "")
+                          if asset_name.endswith(".wcp"):
+                              clean_name = asset_name.replace(".wcp", "")
                               pack_data.append({
                                   "type": w_type,
-                                  "verName": f"Stable - {asset[\"name\"].replace(\".wcp\", \"\")}",
+                                  "verName": "Stable - " + clean_name,
                                   "verCode": "0",
-                                  "remoteUrl": asset["url"]
+                                  "remoteUrl": asset.get("url", "")
                               })
+                  except:
+                      pass
 
           pack_data = sorted(pack_data, key=lambda x: (x["type"], x["verName"]))
 
