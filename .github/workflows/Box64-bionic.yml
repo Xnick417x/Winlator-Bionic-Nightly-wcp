@@ -63,7 +63,7 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd source
-          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/Patch/patch/pippetto-controller-fix.patch" -O my-patch.patch
+          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/patch/pippetto-controller-fix.patch" -O my-patch.patch
           git apply my-patch.patch || true
 
       - name: Configure and Build
@@ -93,7 +93,12 @@ jobs:
             "versionName": "${{ env.FULL_VERSION }}",
             "versionCode": 0,
             "description": "Box64 Bionic Nightly\nCommit: ${{ env.COMMIT_HASH }}",
-            "files": [{"source": "box64", "target": "\${bindir}/box64"}]
+            "files": [
+              {
+                "source": "box64",
+                "target": "\${bindir}/box64"
+              }
+            ]
           }
           EOF
           tar -cJf "bionic-box64-${{ env.FULL_VERSION }}.wcp" box64 profile.json
