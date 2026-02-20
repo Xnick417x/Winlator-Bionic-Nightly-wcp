@@ -1,9 +1,6 @@
 name: Build DXVK+NVAPI Combined
 
 on:
-  push:
-    branches:
-      - Na
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -27,7 +24,7 @@ jobs:
       - name: Check for Updates
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
           else
             cd dxvk
@@ -115,7 +112,6 @@ jobs:
           cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
           cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
           
-          # Find and instantly force-rename the DLLs to strictly match Windows 64/32 rules
           find dxvk-nvapi/build-x64 -name "nvapi*.dll" -exec cp -L {} packaging/system32/nvapi64.dll \;
           find dxvk-nvapi/build-x86 -name "nvapi*.dll" -exec cp -L {} packaging/syswow64/nvapi.dll \;
 
@@ -248,7 +244,7 @@ jobs:
       - name: Check for Updates
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "push" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "SHOULD_BUILD=true" >> $GITHUB_ENV
           else
             cd dxvk
@@ -382,7 +378,6 @@ jobs:
           copy_dll "build-ec" "packaging/system32"
           copy_dll "build-x86" "packaging/syswow64"
           
-          # Find and instantly force-rename the DLLs to strictly match Windows 64/32 rules
           find dxvk-nvapi/build-ec -name "nvapi*.dll" -exec cp -L {} packaging/system32/nvapi64.dll \;
           find dxvk-nvapi/build-x86 -name "nvapi*.dll" -exec cp -L {} packaging/syswow64/nvapi.dll \;
 
