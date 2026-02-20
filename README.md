@@ -81,6 +81,7 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * Pipetto-crypto - Box64 fix [**Pipetto-crypto**](https://github.com/Pipetto-crypto/box64)
 * Wine [**WineHQ**](https://www.winehq.org/)
 * The412banner - wcp hub [**The412Banner**](https://github.com/The412Banner/Nightlies)
+* Zero K11MCH1 - Stables [**K11MCH1**](https://github.com/K11MCH1/Winlator101)
 
 <div align="center">
 Maintained by Xnick417x
