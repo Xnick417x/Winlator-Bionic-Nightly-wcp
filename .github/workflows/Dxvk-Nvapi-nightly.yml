@@ -3,7 +3,7 @@ name: Build DXVK+NVAPI Combined
 on:
   push:
     branches:
-      - Na
+      - your-branch-name-here
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -115,12 +115,13 @@ jobs:
           cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
           cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
           
-          find dxvk-nvapi/build-x64 -name "nvapi64.dll" -exec cp -L {} packaging/system32/ \;
-          find dxvk-nvapi/build-x86 -name "nvapi.dll" -exec cp -L {} packaging/syswow64/ \;
+          # Find and instantly force-rename the DLLs to strictly match Windows 64/32 rules
+          find dxvk-nvapi/build-x64 -name "nvapi*.dll" -exec cp -L {} packaging/system32/nvapi64.dll \;
+          find dxvk-nvapi/build-x86 -name "nvapi*.dll" -exec cp -L {} packaging/syswow64/nvapi.dll \;
 
           cat <<EOF > packaging/profile.json
           {
-            "type": "DXVK-NVAPI",
+            "type": "DXVK",
             "versionName": "2.7.1-nvapi-${COMMIT_HASH}",
             "versionCode": 0,
             "description": "DXVK 2.7.1 GPLAsync + NVAPI",
@@ -381,15 +382,16 @@ jobs:
           copy_dll "build-ec" "packaging/system32"
           copy_dll "build-x86" "packaging/syswow64"
           
-          find dxvk-nvapi/build-ec -name "nvapi64.dll" -exec cp -L {} packaging/system32/ \;
-          find dxvk-nvapi/build-x86 -name "nvapi.dll" -exec cp -L {} packaging/syswow64/ \;
+          # Find and instantly force-rename the DLLs to strictly match Windows 64/32 rules
+          find dxvk-nvapi/build-ec -name "nvapi*.dll" -exec cp -L {} packaging/system32/nvapi64.dll \;
+          find dxvk-nvapi/build-x86 -name "nvapi*.dll" -exec cp -L {} packaging/syswow64/nvapi.dll \;
 
           llvm-strip --strip-all packaging/system32/*.dll
           llvm-strip --strip-all packaging/syswow64/*.dll
 
           cat <<EOF > packaging/profile.json
           {
-            "type": "DXVK-NVAPI",
+            "type": "DXVK",
             "versionName": "${{ env.VERSION_NAME }}",
             "versionCode": 0,
             "description": "DXVK ARM64EC + NVAPI",
