@@ -34,6 +34,18 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 | **Box64** (Non standard - wip) | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/bionic-box64-nightly-857991c50/bionic-box64-0.4.1-857991c50-bionic.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=bionic-box64-nightly+NOT+Weekly&expanded=true) |
 | **WOWBox64** | [**Download Latest**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/wowbox64-nightly-857991c50/WOWBox64-0.4.1-857991c50-nightly.wcp) | [View History](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases?q=wowbox64-nightly+NOT+Weekly&expanded=true) |
 
+### Stable Builds
+
+| Component | Available Releases |
+| :--- | :--- |
+| **DXVK** (GPLAsync) | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-Dxvk) |
+| **DXVK** (ARM64EC) | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-Arm64ec-Dxvk) |
+| **VKD3D-Proton** (Standard) | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-Vk3dk) |
+| **VKD3D-Proton** (ARM64EC) | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-Arm64ec-Vk3dk) |
+| **FEXCore** (ARM64EC) | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-FEX) |
+| **Box64** (Standard) | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-Box64) |
+| **WOWBox64** | [**Browse Stable Versions**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Stable-wowbox64) |
+
 ###  Wine Layers (Bionic)
 [**Download Assets**](https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/tag/Wine)
 
