@@ -3,7 +3,7 @@ name: Build DXVK+NVAPI Combined
 on:
   push:
     branches:
-      - Na
+      - your-branch-name-here
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
@@ -115,8 +115,8 @@ jobs:
           cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
           cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
           
-          cp dxvk-nvapi/build-x64/nvapi64.dll packaging/system32/
-          cp dxvk-nvapi/build-x86/nvapi.dll packaging/syswow64/
+          find dxvk-nvapi/build-x64 -name "nvapi64.dll" -exec cp -L {} packaging/system32/ \;
+          find dxvk-nvapi/build-x86 -name "nvapi.dll" -exec cp -L {} packaging/syswow64/ \;
 
           cat <<EOF > packaging/profile.json
           {
@@ -381,8 +381,8 @@ jobs:
           copy_dll "build-ec" "packaging/system32"
           copy_dll "build-x86" "packaging/syswow64"
           
-          cp "dxvk-nvapi/build-ec/nvapi64.dll" "packaging/system32/"
-          cp "dxvk-nvapi/build-x86/nvapi.dll" "packaging/syswow64/"
+          find dxvk-nvapi/build-ec -name "nvapi64.dll" -exec cp -L {} packaging/system32/ \;
+          find dxvk-nvapi/build-x86 -name "nvapi.dll" -exec cp -L {} packaging/syswow64/ \;
 
           llvm-strip --strip-all packaging/system32/*.dll
           llvm-strip --strip-all packaging/syswow64/*.dll
