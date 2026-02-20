@@ -63,8 +63,8 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd source
-          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/patch/pippetto-controller-fix.patch" -O my-patch.patch
-          git apply my-patch.patch || true
+          wget -q "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/patch/pipetto-controller-fix.patch" -O my-patch.patch
+          patch -p1 < my-patch.patch || true
 
       - name: Configure and Build
         if: env.SHOULD_BUILD == 'true'
