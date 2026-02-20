@@ -75,7 +75,8 @@ Third-party components used for packaging (such as DXVK, Wine, vkd3d-proton, FEX
 * Winlator [**Bruno**](https://github.com/brunodev85/winlator)
 * Winlator cmod [**Coffincolors**](https://github.com/coffincolors/winlator) + [**Pipetto-crypto**](https://github.com/Pipetto-crypto/winlator)
 * Winlator - Ludashi [**StevenMXZ**](https://github.com/StevenMXZ/Winlator-Ludashi)
-* Pipetto-crypto Box64 fix [**Pipetto-crypto**](https://github.com/Pipetto-crypto/box64)
+* Arihany - Pre regression [**Arihany**](https://github.com/Arihany/WinlatorWCPHub)
+* Pipetto-crypto - Box64 fix [**Pipetto-crypto**](https://github.com/Pipetto-crypto/box64)
 * Wine [**WineHQ**](https://www.winehq.org/)
 
 <div align="center">
