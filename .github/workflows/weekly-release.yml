@@ -39,6 +39,9 @@ jobs:
           download_latest "box64-nightly-"
           download_latest "bionic-box64-nightly-"
           download_latest "wowbox64-nightly-"
+          # Added the two new NVAPI nightly targets:
+          download_latest "dxvk-nvapi-nightly-"
+          download_latest "dxvk-nvapi-arm64ec-nightly-"
 
       - name: Create Zip Bundle
         run: |
@@ -57,7 +60,7 @@ jobs:
             Contains the latest available nightly builds as of ${{ env.WEEKLY_DATE }}.
             
             **Contents:**
-            * DXVK (GPLAsync) - Standard & ARM64EC
+            * DXVK & DXVK-NVAPI (GPLAsync) - Standard & ARM64EC
             * VKD3D-Proton (Standard & ARM64EC)
             * FEXCore
             * Box64 (Native & Bionic) & WOWBox64
