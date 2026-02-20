@@ -14,7 +14,9 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 ### Contents for Winlator
 Copy the link below, open Winlator, and go to **Settings** -> **Install Content** -> **Paste URL**.
 
-`https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/main/content.json`
+```text
+[https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/main/content.json](https://raw.githubusercontent.com/Xnick417x/Winlator-Bionic-Nightly-wcp/main/content.json)
+```
 
 ---
 
