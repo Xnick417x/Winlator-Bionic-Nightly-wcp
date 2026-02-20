@@ -1,0 +1,100 @@
+name: Update Content JSON
+
+on:
+  push:
+    branches:
+      - Contents
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Generate content.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -c '
+          import os
+          import json
+          import subprocess
+
+          pack_data = []
+
+          nightly_targets = [
+              ("DXVK", "dxvk-nightly-"),
+              ("DXVK", "dxvk-arm64ec-nightly-"),
+              ("DXVK", "dxvk-nvapi-nightly-"),
+              ("DXVK", "dxvk-nvapi-arm64ec-nightly-"),
+              ("VKD3D", "vk3dk-nightly-"),
+              ("VKD3D", "vk3dk-arm64ec-nightly-"),
+              ("FEXCore", "fex-nightly-"),
+              ("Box64", "box64-nightly-"),
+              ("Box64", "bionic-box64-nightly-"),
+              ("WOWBox64", "wowbox64-nightly-")
+          ]
+
+          stable_targets = [
+              ("DXVK", "Stable-Dxvk"),
+              ("DXVK", "Stable-Arm64ec-Dxvk"),
+              ("VKD3D", "Stable-Vk3dk"),
+              ("VKD3D", "Stable-Arm64ec-Vk3dk"),
+              ("FEXCore", "Stable-FEX"),
+              ("Box64", "Stable-Box64"),
+              ("WOWBox64", "Stable-wowbox64"),
+              ("Wine", "Wine")
+          ]
+
+          def run_gh(cmd):
+              result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+              return result.stdout.strip()
+
+          for w_type, prefix in nightly_targets:
+              tag = run_gh(f"gh release list --limit 100 --json tagName --jq \".[] | select(.tagName | startswith(\\\"{prefix}\\\")) | .tagName\" | head -n 1")
+              if tag:
+                  assets_json = run_gh(f"gh release view {tag} --json assets")
+                  if assets_json:
+                      assets = json.loads(assets_json).get("assets", [])
+                      for asset in assets:
+                          if asset["name"].endswith(".wcp"):
+                              pack_data.append({
+                                  "type": w_type,
+                                  "verName": f"Nightly - {asset[\"name\"].replace(\".wcp\", \"\")}",
+                                  "verCode": "0",
+                                  "remoteUrl": asset["url"]
+                              })
+
+          for w_type, tag in stable_targets:
+              assets_json = run_gh(f"gh release view {tag} --json assets 2>/dev/null")
+              if assets_json:
+                  assets = json.loads(assets_json).get("assets", [])
+                  for asset in assets:
+                          if asset["name"].endswith(".wcp"):
+                              pack_data.append({
+                                  "type": w_type,
+                                  "verName": f"Stable - {asset[\"name\"].replace(\".wcp\", \"\")}",
+                                  "verCode": "0",
+                                  "remoteUrl": asset["url"]
+                              })
+
+          pack_data = sorted(pack_data, key=lambda x: (x["type"], x["verName"]))
+
+          with open("content.json", "w") as f:
+              json.dump(pack_data, f, indent=2)
+          '
+
+      - name: Commit and Push content.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content.json
+          git commit -m "Auto-update WCP Hub content.json [skip ci]" || echo "No changes to commit"
+          git push origin ${{ github.ref_name }}
