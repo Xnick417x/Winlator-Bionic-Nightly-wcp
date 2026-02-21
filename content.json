@@ -355,6 +355,18 @@
   },
   {
     "type": "Wine",
+    "verName": "GN-proton-10.0-arm64ec",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/GN-proton-10.0-arm64ec.wcp"
+  },
+  {
+    "type": "Wine",
+    "verName": "GN-proton-10.0-x86_64",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/GN-proton-10.0-x86_64.wcp"
+  },
+  {
+    "type": "Wine",
     "verName": "proton-10-arm64ec",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/releases/download/Wine/proton-10-arm64ec.wcp.xz"
