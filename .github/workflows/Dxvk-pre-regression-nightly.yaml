@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 env:
-  BINSEM_PATCH: patches/dxvk-binary-semaphores.patch
+  BINSEM_PATCH: patch/dxvk-binary-semaphores.patch
 
 jobs:
   build-standard:
