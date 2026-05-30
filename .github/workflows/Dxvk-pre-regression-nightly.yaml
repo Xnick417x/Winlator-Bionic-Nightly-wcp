@@ -115,7 +115,7 @@ jobs:
             "type": "DXVK",
             "versionName": "${{ env.JSON_VERSION_NAME }}",
             "versionCode": 0,
-            "description": "DXVK ${{ env.LATEST_TAG }} Pre-Regress (GPLAsync + BinSem)",
+            "description": "DXVK ${{ env.LATEST_TAG }} Pre-Regress (GPLAsync + Timeline Semphora)",
             "author": "Blank",
             "files": [
               {
@@ -168,7 +168,7 @@ jobs:
           files: '*.wcp'
           name: "DXVK Pre-Regress Nightly ${{ env.COMMIT_HASH }}"
           body: |
-            Automated nightly build of DXVK (Pre-Regress GPLAsync + BinSem).
+            Automated nightly build of DXVK (Pre-Regress GPLAsync + Timeline Semphora from Leegao).
             Commit: https://github.com/doitsujin/dxvk/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases
@@ -408,7 +408,7 @@ jobs:
             "type": "DXVK",
             "versionName": "${{ env.JSON_VERSION_NAME }}",
             "versionCode": 0,
-            "description": "DXVK ${{ env.LATEST_TAG }} ARM64EC Pre-Regress (GPLAsync + BinSem)",
+            "description": "DXVK ${{ env.LATEST_TAG }} ARM64EC Pre-Regress (GPLAsync + Timeline Semphora)",
             "author": "Blank",
             "files": [
               {
@@ -466,7 +466,7 @@ jobs:
           files: '*.wcp'
           name: "DXVK ARM64EC Pre-Regress Nightly ${{ env.COMMIT_HASH }}"
           body: |
-            Automated nightly build of DXVK (ARM64EC Pre-Regress GPLAsync + BinSem).
+            Automated nightly build of DXVK (ARM64EC Pre-Regress GPLAsync + Timeline Semphora).
             Commit: https://github.com/doitsujin/dxvk/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases (ARM64EC)
