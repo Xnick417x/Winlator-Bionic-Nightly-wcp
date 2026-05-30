@@ -1,9 +1,6 @@
 name: Build DXVK Pre-Regress Combined
 
 on:
-  push:
-    branches:
-      - '**'
   schedule:
     - cron: '14 3 * * *'
   workflow_dispatch:
