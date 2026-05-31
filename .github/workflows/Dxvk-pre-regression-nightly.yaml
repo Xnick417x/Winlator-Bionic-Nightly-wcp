@@ -110,13 +110,13 @@ jobs:
           cp dxvk-built/dxvk-master/x64/*.dll packaging/system32/
           cp dxvk-built/dxvk-master/x32/*.dll packaging/syswow64/
           
-          cat <<EOF > packaging/contents.json
+          cat <<EOF > packaging/profile.json
           {
             "type": "DXVK",
             "versionName": "${{ env.JSON_VERSION_NAME }}",
             "versionCode": 0,
             "description": "DXVK ${{ env.LATEST_TAG }} Pre-Regress (GPLAsync + Timeline Semphora)",
-            "author": "Blank",
+            "author": "Xnick417x",
             "files": [
               {
                 "source": "system32/d3d9.dll",
@@ -158,7 +158,7 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd packaging
-          tar -cJf ../${{ env.VERSION_NAME }}.wcp *
+          tar -cJf ../Dxvk-${{ env.VERSION_NAME }}.wcp *
 
       - name: Create Release
         if: env.SHOULD_BUILD == 'true'
@@ -260,8 +260,8 @@ jobs:
           git fetch --tags
           LATEST_TAG=$(git describe --tags --abbrev=0 | sed 's/^v//')
           echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
-          echo "VERSION_NAME=${LATEST_TAG}-pre-regress-arm64ec-${COMMIT_HASH}" >> $GITHUB_ENV
-          echo "JSON_VERSION_NAME=${LATEST_TAG}-pre-regress-gplasync-arm64ec-${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "VERSION_NAME=${LATEST_TAG}-arm64ec-pre-regress-${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "JSON_VERSION_NAME=${LATEST_TAG}-arm64ec-pre-regress-gplasync-${COMMIT_HASH}" >> $GITHUB_ENV
 
       - name: Install Dependencies
         if: env.SHOULD_BUILD == 'true'
@@ -403,13 +403,13 @@ jobs:
           llvm-strip --strip-all packaging/system32/*.dll
           llvm-strip --strip-all packaging/syswow64/*.dll
 
-          cat <<EOF > packaging/contents.json
+          cat <<EOF > packaging/profile.json
           {
             "type": "DXVK",
             "versionName": "${{ env.JSON_VERSION_NAME }}",
             "versionCode": 0,
-            "description": "DXVK ${{ env.LATEST_TAG }} ARM64EC Pre-Regress (GPLAsync + Timeline Semphora)",
-            "author": "Blank",
+            "description": "DXVK ${{ env.LATEST_TAG }} Arm64ec Pre-Regress (GPLAsync + Timeline Semphora)",
+            "author": "Xnick417x",
             "files": [
               {
                 "source": "system32/d3d10core.dll",
@@ -454,9 +454,12 @@ jobs:
             ]
           }
           EOF
-          
+
+      - name: Create Package
+        if: env.SHOULD_BUILD == 'true'
+        run: |
           cd packaging
-          tar --zstd -cf ../${{ env.VERSION_NAME }}.wcp *
+          tar -cJf ../Dxvk-${{ env.VERSION_NAME }}.wcp *
 
       - name: Create Release (ARM64EC)
         if: env.SHOULD_BUILD == 'true'
@@ -466,7 +469,7 @@ jobs:
           files: '*.wcp'
           name: "DXVK ARM64EC Pre-Regress Nightly ${{ env.COMMIT_HASH }}"
           body: |
-            Automated nightly build of DXVK (ARM64EC Pre-Regress GPLAsync + Timeline Semphora).
+            Automated nightly build of DXVK (ARM64EC Pre-Regress GPLAsync + Timeline Semphora from Leegao).
             Commit: https://github.com/doitsujin/dxvk/commit/${{ env.COMMIT_HASH }}
 
       - name: Cleanup Old Releases (ARM64EC)
