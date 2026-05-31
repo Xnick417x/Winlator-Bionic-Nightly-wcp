@@ -103,7 +103,7 @@ jobs:
             "versionName": "${{ env.VERSION_NAME }}",
             "versionCode": 0,
             "description": "DXVK ${{ env.LATEST_TAG }} GPLAsync",
-            "author": "Blank",
+            "author": "Xnick417x",
             "files": [
               {
                 "source": "system32/d3d9.dll",
@@ -387,7 +387,7 @@ jobs:
             "versionName": "${{ env.LATEST_TAG }}-arm64ec-gplasync-${{ env.COMMIT_HASH }}",
             "versionCode": 0,
             "description": "DXVK ${{ env.LATEST_TAG }} ARM64EC GPLAsync",
-            "author": "Blank",
+            "author": "Xnick417x",
             "files": [
               {
                 "source": "system32/d3d10core.dll",
@@ -433,8 +433,11 @@ jobs:
           }
           EOF
           
+      - name: Create Package
+        if: env.SHOULD_BUILD == 'true'
+        run: |
           cd packaging
-          tar --zstd -cf ../Dxvk-${{ env.VERSION_NAME }}.wcp *
+          tar -cJf ../Dxvk-${{ env.VERSION_NAME }}.wcp *
 
       - name: Create Release (ARM64EC)
         if: env.SHOULD_BUILD == 'true'
