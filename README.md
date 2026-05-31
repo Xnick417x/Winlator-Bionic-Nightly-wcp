@@ -9,6 +9,9 @@ These builds are automatically checked and generated every night at **9:00 PM CS
 
 Contents.Json updated at **12:00 AM CST**
 
+# This repo has been updated and continued [HERE](https://github.com/nicholasx417/WinNative-components) 
+
+This repo is still being maintained. But small bugs have been corrected on newer repo.
 </div>
 
 ---
