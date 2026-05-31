@@ -79,21 +79,21 @@
   },
   {
     "type": "DXVK",
-    "verName": "2.7.1-gplasync-dbefb934",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-dbefb934/2.7.1-gplasync-dbefb934.wcp"
-  },
-  {
-    "type": "DXVK",
     "verName": "Dxvk-2.7.1-arm64ec-gplasync",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/Stable-Arm64ec-Dxvk/Dxvk-2.7.1-arm64ec-gplasync.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "2.7.1-arm64ec-dbefb934",
+    "verName": "Dxvk-2.7.1-arm64ec-be4ac08f",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-dbefb934/2.7.1-arm64ec-dbefb934.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-be4ac08f/Dxvk-2.7.1-arm64ec-be4ac08f.wcp"
+  },
+  {
+    "type": "DXVK",
+    "verName": "Dxvk-2.7.1-gplasync-be4ac08f",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-be4ac08f/Dxvk-2.7.1-gplasync-be4ac08f.wcp"
   },
   {
     "type": "DXVK",
