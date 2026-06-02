@@ -229,9 +229,9 @@
   },
   {
     "type": "FEXCore",
-    "verName": "FEXCore-2605-f5fafa5b9",
+    "verName": "FEXCore-2605-a5c3fc475",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/fex-nightly-2605-f5fafa5b9/FEXCore-2605-f5fafa5b9.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/fex-nightly-2605-a5c3fc475/FEXCore-2605-a5c3fc475.wcp"
   },
   {
     "type": "FEXCore",
@@ -421,15 +421,15 @@
   },
   {
     "type": "VKD3D",
-    "verName": "Vkd3d-3.0.1-110e8bd4",
+    "verName": "Vkd3d-3.0.1-arm64ec-ceccf0d9",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-nightly-110e8bd4/Vkd3d-3.0.1-110e8bd4.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-arm64ec-nightly-ceccf0d9/Vkd3d-3.0.1-arm64ec-ceccf0d9.wcp"
   },
   {
     "type": "VKD3D",
-    "verName": "Vkd3d-3.0.1-arm64ec-110e8bd4",
+    "verName": "Vkd3d-3.0.1-ceccf0d9",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-arm64ec-nightly-110e8bd4/Vkd3d-3.0.1-arm64ec-110e8bd4.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-nightly-ceccf0d9/Vkd3d-3.0.1-ceccf0d9.wcp"
   },
   {
     "type": "VKD3D",
