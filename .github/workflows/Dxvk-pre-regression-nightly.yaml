@@ -87,8 +87,7 @@ jobs:
         run: |
           cd dxvk
           # GPLAsync Patch
-          wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
-          patch -p1 < dxvk-gplasync-master.patch
+          patch -p1 < ../my-repo/patch/dxvk-gplasync-master.patch
           
           # Binary Semaphores Patch
           git apply --verbose ../my-repo/${{ env.BINSEM_PATCH }}
@@ -119,6 +118,10 @@ jobs:
             "author": "Xnick417x",
             "files": [
               {
+                "source": "system32/d3d8.dll",
+                "target": "\${system32}/d3d8.dll"
+              },
+              {
                 "source": "system32/d3d9.dll",
                 "target": "\${system32}/d3d9.dll"
               },
@@ -133,6 +136,10 @@ jobs:
               {
                 "source": "system32/dxgi.dll",
                 "target": "\${system32}/dxgi.dll"
+              },
+              {
+                "source": "syswow64/d3d8.dll",
+                "target": "\${syswow64}/d3d8.dll"
               },
               {
                 "source": "syswow64/d3d9.dll",
@@ -326,8 +333,7 @@ jobs:
         run: |
           cd dxvk
           # GPLAsync Patch
-          wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
-          patch -p1 < dxvk-gplasync-master.patch
+          patch -p1 < ../my-repo/patch/dxvk-gplasync-master.patch
           
           # Binary Semaphores Patch
           git apply --verbose ../my-repo/${{ env.BINSEM_PATCH }}
@@ -344,6 +350,7 @@ jobs:
           windres = 'arm64ec-w64-mingw32-windres'
           widl = 'arm64ec-w64-mingw32-widl'
           pkg-config = 'pkg-config'
+          
           [host_machine]
           system = 'windows'
           cpu_family = 'aarch64'
@@ -412,14 +419,6 @@ jobs:
             "author": "Xnick417x",
             "files": [
               {
-                "source": "system32/d3d10core.dll",
-                "target": "\${system32}/d3d10core.dll"
-              },
-              {
-                "source": "system32/d3d11.dll",
-                "target": "\${system32}/d3d11.dll"
-              },
-              {
                 "source": "system32/d3d8.dll",
                 "target": "\${system32}/d3d8.dll"
               },
@@ -428,16 +427,16 @@ jobs:
                 "target": "\${system32}/d3d9.dll"
               },
               {
+                "source": "system32/d3d10core.dll",
+                "target": "\${system32}/d3d10core.dll"
+              },
+              {
+                "source": "system32/d3d11.dll",
+                "target": "\${system32}/d3d11.dll"
+              },
+              {
                 "source": "system32/dxgi.dll",
                 "target": "\${system32}/dxgi.dll"
-              },
-              {
-                "source": "syswow64/d3d10core.dll",
-                "target": "\${syswow64}/d3d10core.dll"
-              },
-              {
-                "source": "syswow64/d3d11.dll",
-                "target": "\${syswow64}/d3d11.dll"
               },
               {
                 "source": "syswow64/d3d8.dll",
@@ -446,6 +445,14 @@ jobs:
               {
                 "source": "syswow64/d3d9.dll",
                 "target": "\${syswow64}/d3d9.dll"
+              },
+              {
+                "source": "syswow64/d3d10core.dll",
+                "target": "\${syswow64}/d3d10core.dll"
+              },
+              {
+                "source": "syswow64/d3d11.dll",
+                "target": "\${syswow64}/d3d11.dll"
               },
               {
                 "source": "syswow64/dxgi.dll",
