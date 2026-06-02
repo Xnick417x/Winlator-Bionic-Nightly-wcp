@@ -13,6 +13,11 @@ jobs:
     name: Build DXVK (Standard)
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout User Repo
+        uses: actions/checkout@v4
+        with:
+          path: my-repo
+
       - name: Checkout DXVK
         uses: actions/checkout@v4
         with:
@@ -77,8 +82,7 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dxvk
-          wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
-          patch -p1 < dxvk-gplasync-master.patch
+          patch -p1 < ../my-repo/patch/dxvk-gplasync-master.patch
 
       - name: Build DXVK
         if: env.SHOULD_BUILD == 'true'
@@ -106,6 +110,10 @@ jobs:
             "author": "Xnick417x",
             "files": [
               {
+                "source": "system32/d3d8.dll",
+                "target": "\${system32}/d3d8.dll"
+              },
+              {
                 "source": "system32/d3d9.dll",
                 "target": "\${system32}/d3d9.dll"
               },
@@ -120,6 +128,10 @@ jobs:
               {
                 "source": "system32/dxgi.dll",
                 "target": "\${system32}/dxgi.dll"
+              },
+              {
+                "source": "syswow64/d3d8.dll",
+                "target": "\${syswow64}/d3d8.dll"
               },
               {
                 "source": "syswow64/d3d9.dll",
@@ -207,6 +219,11 @@ jobs:
     name: Build DXVK (ARM64EC)
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout User Repo
+        uses: actions/checkout@v4
+        with:
+          path: my-repo
+
       - name: Checkout DXVK
         uses: actions/checkout@v4
         with:
@@ -306,8 +323,7 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         run: |
           cd dxvk
-          wget https://gitlab.com/Ph42oN/dxvk-gplasync/-/raw/main/patches/dxvk-gplasync-master.patch
-          patch -p1 < dxvk-gplasync-master.patch
+          patch -p1 < ../my-repo/patch/dxvk-gplasync-master.patch
 
       - name: Configure Cross-Files
         if: env.SHOULD_BUILD == 'true'
@@ -390,14 +406,6 @@ jobs:
             "author": "Xnick417x",
             "files": [
               {
-                "source": "system32/d3d10core.dll",
-                "target": "\${system32}/d3d10core.dll"
-              },
-              {
-                "source": "system32/d3d11.dll",
-                "target": "\${system32}/d3d11.dll"
-              },
-              {
                 "source": "system32/d3d8.dll",
                 "target": "\${system32}/d3d8.dll"
               },
@@ -406,16 +414,16 @@ jobs:
                 "target": "\${system32}/d3d9.dll"
               },
               {
+                "source": "system32/d3d10core.dll",
+                "target": "\${system32}/d3d10core.dll"
+              },
+              {
+                "source": "system32/d3d11.dll",
+                "target": "\${system32}/d3d11.dll"
+              },
+              {
                 "source": "system32/dxgi.dll",
                 "target": "\${system32}/dxgi.dll"
-              },
-              {
-                "source": "syswow64/d3d10core.dll",
-                "target": "\${syswow64}/d3d10core.dll"
-              },
-              {
-                "source": "syswow64/d3d11.dll",
-                "target": "\${syswow64}/d3d11.dll"
               },
               {
                 "source": "syswow64/d3d8.dll",
@@ -426,13 +434,21 @@ jobs:
                 "target": "\${syswow64}/d3d9.dll"
               },
               {
+                "source": "syswow64/d3d10core.dll",
+                "target": "\${syswow64}/d3d10core.dll"
+              },
+              {
+                "source": "syswow64/d3d11.dll",
+                "target": "\${syswow64}/d3d11.dll"
+              },
+              {
                 "source": "syswow64/dxgi.dll",
                 "target": "\${syswow64}/dxgi.dll"
               }
             ]
           }
           EOF
-          
+
       - name: Create Package
         if: env.SHOULD_BUILD == 'true'
         run: |
