@@ -1,9 +1,9 @@
 [
   {
     "type": "Box64",
-    "verName": "Box64-0.4.3-3583d9c90",
+    "verName": "Box64-0.4.3-419e095ea",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-3583d9c90/Box64-0.4.3-3583d9c90.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-419e095ea/Box64-0.4.3-419e095ea.wcp"
   },
   {
     "type": "Box64",
@@ -79,21 +79,21 @@
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-2.7.1-gplasync-840d1474",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-840d1474/Dxvk-2.7.1-gplasync-840d1474.wcp"
-  },
-  {
-    "type": "DXVK",
     "verName": "Dxvk-2.7.1-arm64ec-gplasync",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/Stable-Arm64ec-Dxvk/Dxvk-2.7.1-arm64ec-gplasync.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-2.7.1-arm64ec-840d1474",
+    "verName": "Dxvk-2.7.1-arm64ec-6eddf20c",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-840d1474/Dxvk-2.7.1-arm64ec-840d1474.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-6eddf20c/Dxvk-2.7.1-arm64ec-6eddf20c.wcp"
+  },
+  {
+    "type": "DXVK",
+    "verName": "Dxvk-2.7.1-gplasync-6eddf20c",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-6eddf20c/Dxvk-2.7.1-gplasync-6eddf20c.wcp"
   },
   {
     "type": "DXVK",
@@ -229,9 +229,9 @@
   },
   {
     "type": "FEXCore",
-    "verName": "FEXCore-2605-d848cbbc0",
+    "verName": "FEXCore-2605-e02953dc1",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/fex-nightly-2605-d848cbbc0/FEXCore-2605-d848cbbc0.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/fex-nightly-2605-e02953dc1/FEXCore-2605-e02953dc1.wcp"
   },
   {
     "type": "FEXCore",
@@ -421,15 +421,15 @@
   },
   {
     "type": "VKD3D",
-    "verName": "Vkd3d-3.0.1-arm64ec-ceccf0d9",
+    "verName": "Vkd3d-3.0.1-6062cc70",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-arm64ec-nightly-ceccf0d9/Vkd3d-3.0.1-arm64ec-ceccf0d9.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-nightly-6062cc70/Vkd3d-3.0.1-6062cc70.wcp"
   },
   {
     "type": "VKD3D",
-    "verName": "Vkd3d-3.0.1-ceccf0d9",
+    "verName": "Vkd3d-3.0.1-arm64ec-6062cc70",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-nightly-ceccf0d9/Vkd3d-3.0.1-ceccf0d9.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-arm64ec-nightly-6062cc70/Vkd3d-3.0.1-arm64ec-6062cc70.wcp"
   },
   {
     "type": "VKD3D",
@@ -451,9 +451,9 @@
   },
   {
     "type": "WOWBox64",
-    "verName": "WOWBox64-0.4.3-3583d9c90",
+    "verName": "WOWBox64-0.4.3-419e095ea",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-3583d9c90/WOWBox64-0.4.3-3583d9c90.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-419e095ea/WOWBox64-0.4.3-419e095ea.wcp"
   },
   {
     "type": "WOWBox64",
