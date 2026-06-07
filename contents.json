@@ -1,9 +1,9 @@
 [
   {
     "type": "Box64",
-    "verName": "Box64-0.4.3-93abdcf31",
+    "verName": "Box64-0.4.3-e694f2ca8",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-93abdcf31/Box64-0.4.3-93abdcf31.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-e694f2ca8/Box64-0.4.3-e694f2ca8.wcp"
   },
   {
     "type": "Box64",
@@ -79,9 +79,9 @@
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-2.7.1-gplasync-bf583bc4",
+    "verName": "Dxvk-2.7.1-gplasync-385e95bf",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-bf583bc4/Dxvk-2.7.1-gplasync-bf583bc4.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-385e95bf/Dxvk-2.7.1-gplasync-385e95bf.wcp"
   },
   {
     "type": "DXVK",
@@ -91,9 +91,9 @@
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-2.7.1-arm64ec-bf583bc4",
+    "verName": "Dxvk-2.7.1-arm64ec-385e95bf",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-bf583bc4/Dxvk-2.7.1-arm64ec-bf583bc4.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-385e95bf/Dxvk-2.7.1-arm64ec-385e95bf.wcp"
   },
   {
     "type": "DXVK",
@@ -451,9 +451,9 @@
   },
   {
     "type": "WOWBox64",
-    "verName": "WOWBox64-0.4.3-93abdcf31",
+    "verName": "WOWBox64-0.4.3-e694f2ca8",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-93abdcf31/WOWBox64-0.4.3-93abdcf31.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-e694f2ca8/WOWBox64-0.4.3-e694f2ca8.wcp"
   },
   {
     "type": "WOWBox64",
