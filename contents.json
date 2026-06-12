@@ -1,9 +1,9 @@
 [
   {
     "type": "Box64",
-    "verName": "Box64-0.4.3-c14f0eca8",
+    "verName": "Box64-0.4.3-8d7f6a54d",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-c14f0eca8/Box64-0.4.3-c14f0eca8.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-8d7f6a54d/Box64-0.4.3-8d7f6a54d.wcp"
   },
   {
     "type": "Box64",
@@ -79,21 +79,21 @@
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-2.7.1-gplasync-eae75635",
-    "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-eae75635/Dxvk-2.7.1-gplasync-eae75635.wcp"
-  },
-  {
-    "type": "DXVK",
     "verName": "Dxvk-2.7.1-arm64ec-gplasync",
     "verCode": "0",
     "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/Stable-Arm64ec-Dxvk/Dxvk-2.7.1-arm64ec-gplasync.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-2.7.1-arm64ec-eae75635",
+    "verName": "Dxvk-2.7.1-arm64ec-9aa4e3da",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-eae75635/Dxvk-2.7.1-arm64ec-eae75635.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-9aa4e3da/Dxvk-2.7.1-arm64ec-9aa4e3da.wcp"
+  },
+  {
+    "type": "DXVK",
+    "verName": "Dxvk-2.7.1-gplasync-9aa4e3da",
+    "verCode": "0",
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-9aa4e3da/Dxvk-2.7.1-gplasync-9aa4e3da.wcp"
   },
   {
     "type": "DXVK",
@@ -451,9 +451,9 @@
   },
   {
     "type": "WOWBox64",
-    "verName": "WOWBox64-0.4.3-c14f0eca8",
+    "verName": "WOWBox64-0.4.3-8d7f6a54d",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-c14f0eca8/WOWBox64-0.4.3-c14f0eca8.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-8d7f6a54d/WOWBox64-0.4.3-8d7f6a54d.wcp"
   },
   {
     "type": "WOWBox64",
