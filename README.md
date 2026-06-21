@@ -50,7 +50,7 @@ For Driver manager URL. Paste main repo URL.
 | **Box64** (Non standard - wip) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/bionic-box64-nightly-0.4.3-8b5cc0888/Bionic-Box64-0.4.3-8b5cc0888.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=bionic-box64-nightly+NOT+Weekly&expanded=true) |
 | **WOWBox64** | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-50c8b90b0/WOWBox64-0.4.3-50c8b90b0.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=wowbox64-nightly+NOT+Weekly&expanded=true) |
 | **DXVK** (Pre-Regress Standard) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-pre-regress-nightly-b0bb9475/2.7.1-pre-regress-b0bb9475.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=dxvk-pre-regress-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
-| **DXVK** (Pre-Regress ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-pre-regress-nightly-b0bb9475/2.7.1-arm64ec-pre-regress-b0bb9475.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=dxvk-arm64ec-pre-regress-nightly+NOT+Weekly&expanded=true) |
+| **DXVK** (Pre-Regress ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-pre-regress-nightly-8c9b4822/2.7.1-arm64ec-pre-regress-8c9b4822.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=dxvk-arm64ec-pre-regress-nightly+NOT+Weekly&expanded=true) |
 
 ### Stable Builds
 
