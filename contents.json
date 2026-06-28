@@ -73,15 +73,15 @@
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-3.0-arm64ec-0b49a398",
+    "verName": "Dxvk-3.0-arm64ec-a4f7d106",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-0b49a398/Dxvk-3.0-arm64ec-0b49a398.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-a4f7d106/Dxvk-3.0-arm64ec-a4f7d106.wcp"
   },
   {
     "type": "DXVK",
-    "verName": "Dxvk-3.0-gplasync-0b49a398",
+    "verName": "Dxvk-3.0-gplasync-a4f7d106",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-0b49a398/Dxvk-3.0-gplasync-0b49a398.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-a4f7d106/Dxvk-3.0-gplasync-a4f7d106.wcp"
   },
   {
     "type": "DXVK",
@@ -229,9 +229,9 @@
   },
   {
     "type": "FEXCore",
-    "verName": "FEXCore-2605-fe4d2bc6c",
+    "verName": "FEXCore-2605-78832cc0d",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/fex-nightly-2605-fe4d2bc6c/FEXCore-2605-fe4d2bc6c.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/fex-nightly-2605-78832cc0d/FEXCore-2605-78832cc0d.wcp"
   },
   {
     "type": "FEXCore",
