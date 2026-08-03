@@ -1,9 +1,9 @@
 [
   {
     "type": "Box64",
-    "verName": "Box64-0.4.3-78383901f",
+    "verName": "Box64-0.4.4-2f130fab1",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.3-78383901f/Box64-0.4.3-78383901f.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/box64-nightly-0.4.4-2f130fab1/Box64-0.4.4-2f130fab1.wcp"
   },
   {
     "type": "Box64",
@@ -463,9 +463,9 @@
   },
   {
     "type": "WOWBox64",
-    "verName": "WOWBox64-0.4.3-78383901f",
+    "verName": "WOWBox64-0.4.4-2f130fab1",
     "verCode": "0",
-    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.3-78383901f/WOWBox64-0.4.3-78383901f.wcp"
+    "remoteUrl": "https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/wowbox64-nightly-0.4.4-2f130fab1/WOWBox64-0.4.4-2f130fab1.wcp"
   },
   {
     "type": "WOWBox64",
