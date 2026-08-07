@@ -40,7 +40,7 @@ For Driver manager URL. Paste main repo URL.
 
 | Component | Download | History |
 | :--- | :--- | :--- |
-| **Weekly Bundle** (All-in-One) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/Weekly-2026-07-31/Weekly-2026-07-31.7z) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=Weekly&expanded=true) |
+| **Weekly Bundle** (All-in-One) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/Weekly-2026-08-07/Weekly-2026-08-07.7z) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=Weekly&expanded=true) |
 | **DXVK** (GPLAsync) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-nightly-1aecb5d9/3.0.2-gplasync-1aecb5d9.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=dxvk-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
 | **DXVK** (ARM64EC) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/dxvk-arm64ec-nightly-1aecb5d9/3.0.2-arm64ec-1aecb5d9.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=dxvk-arm64ec-nightly+NOT+Weekly&expanded=true) |
 | **VKD3D-Proton** (Standard) | [**Download Latest**](https://github.com/Xnick417x/winlator-nightly-wcp/releases/download/vkd3d-nightly-2c7ba22c/Vkd3d-3.0.1-2c7ba22c.wcp) | [View History](https://github.com/Xnick417x/winlator-nightly-wcp/releases?q=vkd3d-nightly+NOT+arm64ec+NOT+Weekly&expanded=true) |
